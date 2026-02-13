@@ -1,0 +1,8 @@
+{% extends "base.html" %} {% block content %}
+
+<h1>{{ user.slug }}</h1>
+
+{% for shirt in user.shirt_list %}
+<h1>{{ shirt.name }}</h1>
+
+{% endfor %} {% endblock %}

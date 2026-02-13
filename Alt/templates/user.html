@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Django + Stripe Subscriptions</title>
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}"> <!-- Link to your custom CSS file -->
+</head>
+<body>
+  <div class="container">
+    <div class="TY-Message">
+      <h1>Thank You</h1>
+      <p>
+        You are visiting {{ user.slug }}'s Altrue Page. Here you can learn about the causes and world issues they care about the most, and possibly make a donation to a non-profit of {{ user.slug }}'s choice.
+      </p>
+    </div>
+
+    <a href="{% url 'Alt:donation_form' slug=user.slug %}">Donate Now</a>
+
+    <div class="shirt-container">
+      {% if user.shirt_list.count > 0 %}
+        <h2>Shirts:</h2>
+        <div class="shirt-grid">
+          {% for shirt in user.shirt_list.all %}
+            <div class="shirt-item" data-shirt-id="{{ shirt.id }}">
+              <img src="{{ shirt.shirt_image }}" alt="{{ shirt.name }}" width="300" height="300" />
+                <p>{{ shirt.name }}</p> <!-- Display the shirt name -->
+
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+
+   <div class="NPlist">
+  <h2>Non-Profits:</h2>
+  <div class="non-profit-grid">
+    {% for nonprofit in user.nonProfit_list.all %}
+      <div class="non-profit-item" data-nonprofit-id="{{ nonprofit.id }}">
+        <img src="{{ nonprofit.logo }}" alt="{{ nonprofit.name }}" width="200" height="200">
+        <p>{{ nonprofit.name }}</p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+    <section class="section">
+      <div class="container">
+        <button class="button is-primary purchase-btn" id="purchaseBtn">Purchase!</button>
+      </div>
+    </section>
+  </div>
+
+  {% block scripts %}
+  <script src="https://js.stripe.com/v3/"></script>
+  <script src="{% static "main.js" %}"></script>
+  <script src="{% static "script.js" %}"></script> <!-- Include the script.js file -->
+  {% endblock scripts %}
+</body>
+</html>
+
+{% endblock content %}

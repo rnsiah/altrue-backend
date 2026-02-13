@@ -1,0 +1,33 @@
+<!-- landing_page.html -->
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+    Altrue - Empowerment Through Apparel, Impact Through Action
+{% endblock %}
+
+{% block content %}
+<section class="hero" style="background-image: url('{% static 'images/landing2.png' %}');">
+    <div class="hero-content">
+        <h1>1</h1>
+        <p>1</p>
+        <a href="#" class="btn">Order Now</a>
+    </div>
+</section>
+
+<section class="features">
+    <div class="feature">
+        <h2>Fast Delivery</h2>
+        <p>Get your food delivered to your doorstep quickly and efficiently.</p>
+    </div>
+    <div class="feature">
+        <h2>Wide Selection</h2>
+        <p>Choose from a variety of cuisines and restaurants in your area.</p>
+    </div>
+    <div class="feature">
+        <h2>Easy Ordering</h2>
+        <p>Ordering food with DoorDash is simple and hassle-free.</p>
+    </div>
+</section>
+{% endblock %}

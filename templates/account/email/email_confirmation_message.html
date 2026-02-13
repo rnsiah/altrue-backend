@@ -1,0 +1,13 @@
+
+
+{% block content %}
+    {% autoescape off %}
+        {% user_display user as user_display %}
+        {% blocktrans with site_name=current_site.name site_domain=current_site.domain %}
+            
+            <h1>Altrue</h1>
+            <p>You're receiving this email because user {{ user_display }} has given your email address to register an account on {{ site_domain }}.</p>
+            <p>To confirm this is correct, click <a href="{{ activate_url }}">here</a>.</p>
+        {% endblocktrans %}
+    {% endautoescape %}
+{% endblock content %}

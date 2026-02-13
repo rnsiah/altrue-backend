@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.log
+
+# Environment files
+.env
+*.env
+.env.*
+
+# Virtual environment
+.venv/
+venv/
+env/
+pip-wheel-metadata/
+
+# Django
+db.sqlite3
+debug.log
+media/
+media_root/
+staticfiles/
+static/
+*.sqlite3
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Render build outputs
+*.tar
+*.zip
+*.bak
+*.old
+
+# Pytest / Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Security: Never commit secrets
+.env
+*.env
+.env.local
+.env.production

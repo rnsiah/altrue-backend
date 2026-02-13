@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Donation Form{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/donor_form.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="fullcontainer">
+    <div class="message">
+        <h2>Make a Difference!</h2>
+        <p>Thank you for considering a donation! Your contribution can help make a positive impact on someone's life.</p>
+        <p>Follow the simple steps below to complete your donation:</p>
+        <ol>
+            <li>Enter the amount you wish to donate.</li>
+            <li>Fill out your payment information.</li>
+            <li>Click the "Donate Now" button to complete your donation.</li>
+        </ol>
+
+        <div class="category-selection">
+    <h2>Select Donation Category</h2>
+    <select id="category-select" name="category">
+        {% for category in categories %}
+            <option value="{{ category.id }}">{{ category.name }}</option>
+        {% endfor %}
+    </select>
+</div>
+    </div>
+    <div class="donation-form">
+        <h2>Donation Form</h2>
+        <form id="payment-form">
+            <input name="email" type="text" id="email" placeholder="Enter your email" required>
+            <input name="first_name" type="text" id="first-name" placeholder="Enter your first name" required>
+            <input name="last_name" type="text" id="last-name" placeholder="Enter your last name" required>
+            <input name="amount" type="number" id="amount" placeholder="Enter donation amount" required>
+            <input name="slug" type="text"id="slug"  value="{{ slug }}" readonly>
+
+            <div id="card-element"></div>
+            <button id="submit-button" type="submit">Donate Now</button>
+            <div id="error-message" role="alert"></div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+        var stripeApiKey = "{{ stripe_publishable_key }}";
+    </script>
+<!-- Include Stripe.js -->
+<script src="https://js.stripe.com/v3/"></script>
+
+<!-- Include script.js for Stripe functionality -->
+<script src="{% static 'stripe_script.js' %}"></script>
+{% endblock %}

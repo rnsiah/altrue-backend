@@ -1,0 +1,12 @@
+{% extends 'base.html' %} {% load static %} {% block script %}
+<script src="https://js.stripe.com/v3/"></script>
+<!-- new -->
+
+<script src="{% static 'main.js' %}"></script>
+{% endblock script %} {% block content %}
+
+<h1>Altrue NonProfits</h1>
+{% for nonprofit in object_list %}
+<li>{{nonprofit.name}}</li>
+
+{% endfor %} {% endblock content%}

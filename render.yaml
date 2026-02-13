@@ -1,0 +1,67 @@
+services:
+  - type: web
+    name: altrue-backend
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: |
+      pip install --upgrade pip
+      pip install pipenv
+      pipenv install --deploy --ignore-pipfile
+      pipenv run python manage.py collectstatic --noinput
+    startCommand: pipenv run gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "altrue-backend.onrender.com"
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "altrue-backend.onrender.com"
+      - key: AWS_ACCESS_KEY_ID
+        value: ""
+      - key: AWS_SECRET_ACCESS_KEY
+        value: ""
+      - key: AWS_STORAGE_BUCKET_NAME
+        value: ""
+      - key: STRIPE_SECRET_KEY
+        value: ""
+      - key: STRIPE_PUBLISHABLE_KEY
+        value: ""
+      - key: PRINTFUL_API_TOKEN
+        value: ""
+      - key: EMAIL_HOST_PASSWORD
+        value: ""
+      - key: EMAIL_HOST_USER
+        value: ""
+      - key: DEFAULT_FROM_EMAIL
+        value: ""
+      - key: CORS_ALLOWED_ORIGINS
+        value: "http://localhost:8000"
+      - key: REDIS_URL
+        value: "redis://localhost:6379/0"
+      - key: DB_NAME
+        fromDatabase:
+          name: altrue-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: altrue-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: altrue-db
+          property: password
+      - key: DB_HOST
+        fromDatabase:
+          name: altrue-db
+          property: host
+      - key: DB_PORT
+        value: "5432"
+
+databases:
+  - name: altrue-db
+    plan: free

@@ -1,0 +1,144 @@
+/* styles.css */
+
+
+/* General styles */
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+
+/* Thank You message */
+
+.TY-Message {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+
+/* Button styles */
+
+.button {
+    display: block;
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
+    margin-bottom: 20px;
+}
+
+
+/* Shirt grid styles */
+
+.shirt-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.shirt-item {
+    cursor: pointer;
+    text-align: center;
+    margin: 10px;
+    padding: 10px;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease;
+    flex: 0 0 calc(25% - 20px);
+    /* 4 columns by default */
+}
+
+.shirt-item img {
+    max-width: 100%;
+    height: auto;
+}
+
+.shirt-item p {
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+
+/* Non-profit list styles */
+
+.NPlist {
+    margin-top: 20px;
+}
+
+.non-profit-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.non-profit-list li {
+    margin-bottom: 5px;
+}
+
+
+/* Responsive styles */
+
+@media only screen and (max-width: 600px) {
+    .container {
+        padding: 10px;
+    }
+    .button {
+        max-width: none;
+    }
+    .shirt-item {
+        flex: 0 0 calc(50% - 20px);
+        /* 2 columns on smaller screens */
+    }
+}
+
+@media only screen and (min-width: 601px) and (max-width: 900px) {
+    .shirt-item {
+        flex: 0 0 calc(33.33% - 20px);
+        /* 3 columns on medium screens */
+    }
+}
+
+
+/* Corrective styles for button selection */
+
+.shirt-item.selected {
+    border: 2px solid blue;
+    /* Add border to indicate selection */
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+    /* Add shadow to indicate selection */
+}
+
+.non-profit-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.non-profit-item {
+    text-align: center;
+    margin: 10px;
+    cursor: pointer;
+    /* Add cursor pointer to indicate clickable */
+}
+
+.non-profit-item img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 5px;
+    /* Add border radius for a button-like appearance */
+}
+
+.non-profit-item.selected {
+    border: 2px solid blue;
+    /* Add border to indicate selection */
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+    /* Add shadow to indicate selection */
+}

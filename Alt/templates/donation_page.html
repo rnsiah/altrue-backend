@@ -1,0 +1,20 @@
+<!-- donation_page.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Donation</title>
+</head>
+<body>
+    <h1>Scan the QR Code to Donate</h1>
+    <img src="{{ qr_img }}" alt="QR Code">
+    
+    <form method="post" action="/process_donation/">
+        {% csrf_token %}
+        <label for="amount">Enter Donation Amount:</label><br>
+        <input type="number" id="amount" name="amount" required><br><br>
+        <button type="submit">Donate</button>
+    </form>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!-- base.html -->
+{% load static %}
+
+<!-- base.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Your Title Here{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/basestyles.css' %}">
+    {% block extra_css %}{% endblock %}
+
+</head>
+<body>
+    <header>
+        <nav>
+            <div class="logo">Altrue Global</div>
+            <ul>
+                <li><a href="#">Home</a></li>
+                <li><a href="#">About</a></li>
+                <li><a href="#">Services</a></li>
+                <li><a href="#">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Altrue Global. All rights reserved.</p>
+    </footer>
+    {% block extra_js %}{% endblock extra_js %}
+</body>
+</html>
+

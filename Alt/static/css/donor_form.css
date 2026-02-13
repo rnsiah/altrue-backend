@@ -1,0 +1,97 @@
+/* donor_form.css */
+
+
+/* Donation form styles */
+
+.fullcontainer {
+    display: flex;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.message {
+    text-align: left;
+    margin-bottom: 20px;
+}
+
+.donation-form {
+    width: 50%;
+    /* Adjust width as needed */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.donation-form h2 {
+    margin-bottom: 10px;
+}
+
+.donation-form form {
+    margin-top: 20px;
+}
+
+.donation-form input[type="text"],
+.donation-form input[type="number"] {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-sizing: border-box;
+}
+
+.donation-form #card-element {
+    margin-bottom: 20px;
+}
+
+.donation-form #submit-button {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.donation-form #submit-button:hover {
+    background-color: #0056b3;
+}
+
+.donation-form #error-message {
+    color: red;
+    margin-top: 10px;
+}
+
+.category-selection {
+    width: calc(33.33% - 20px);
+    /* Adjust width as needed */
+}
+
+.category-selection {
+    background-color: #f9f9f9;
+    padding: 20px;
+}
+
+.category-selection h2 {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+}
+
+
+/* Responsive styles */
+
+@media only screen and (max-width: 768px) {
+    .donation-form {
+        width: 80%;
+        /* Adjust width for smaller screens */
+    }
+}
+
+@media only screen and (max-width: 600px) {
+    .donation-form {
+        width: 100%;
+        /* Full width on small screens */
+    }
+}
