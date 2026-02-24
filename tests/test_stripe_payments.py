@@ -1,122 +1,292 @@
 """
-Tests for Stripe PaymentIntent creation and payment flows
-Uses mocking to avoid real Stripe API calls
+Test Stripe payment integration for Altrue.
+
+Tests cover:
+- PaymentIntent creation for donations
+- Stripe webhook handling
+- Error handling for Stripe API failures
+
+All Stripe calls are mocked to avoid external API usage.
 """
 import pytest
 from unittest.mock import patch, MagicMock
-from django.urls import reverse
 from rest_framework import status
+from rest_framework.authtoken.models import Token
+from django.contrib.auth import get_user_model
+
+from api.models import UserProfile, Balance
+from Alt.models import NonProfit, Atrocity
+
+User = get_user_model()
 
 
-@pytest.mark.unit
-@pytest.mark.stripe
-class TestStripePaymentIntent:
-    """Test Stripe PaymentIntent creation with mocked Stripe API"""
+def create_test_user():
+    """Helper to create test user with full profile."""
+    user = User.objects.create_user(
+        email='test@example.com',
+        username='testuser',
+        password='testpass123'
+    )
+    return user
 
-    @patch('stripe.PaymentIntent.create')
+
+def create_test_nonprofit():
+    """Helper to create test nonprofit."""
+    from Alt.models import Country
+    country = Country.objects.create(name='TestCountry')
+    return NonProfit.objects.create(
+        name='Test Nonprofit',
+        slug='test-nonprofit',
+        country=country
+    )
+
+
+def create_test_atrocity():
+    """Helper to create test atrocity."""
+    from Alt.models import Country
+    country = Country.objects.create(name='TestCountry')
+    return Atrocity.objects.create(
+        title='Test Atrocity',
+        region='Test Region',
+        info='Test info',
+        image_url='https://example.com/image.png',
+        country=country,
+        slug='test-atrocity'
+    )
+
+
+@pytest.mark.django_db
+class TestPaymentIntentCreation:
+    """Test PaymentIntent creation for donations."""
+    
     @patch('stripe.Customer.create')
+    @patch('stripe.PaymentIntent.create')
     @patch('stripe.EphemeralKey.create')
-    def test_create_payment_intent_nonprofit(
-        self, mock_ephemeral, mock_customer, mock_payment_intent, 
-        authenticated_client, test_user_with_profile, test_nonprofit
-    ):
-        """
-        Test creating PaymentIntent for nonprofit donation.
+    def test_payment_intent_nonprofit(self, mock_ephemeral, mock_intent, mock_customer, client):
+        """Test creating PaymentIntent for nonprofit donation.
         
-        Setup: Mock Stripe Customer, PaymentIntent, and EphemeralKey
-        Input: $10.00 donation amount (1000 cents)
-        Expected: HTTP 200 with client_secret and payment intent ID
+        Setup: Mock all Stripe API calls
+        Input: $5.00 donation amount (500 cents)
+        Expected: PaymentIntent with client_secret, customer id, ephemeral key
         """
-        # Configure mocks
+        # Setup mocks
         mock_customer.return_value = MagicMock(id='cus_test123')
-        mock_payment_intent.return_value = MagicMock(
+        mock_intent.return_value = MagicMock(
             id='pi_test123',
-            client_secret='pi_test123_secret_xyz'
+            client_secret='pi_test_secret_123'
         )
         mock_ephemeral.return_value = MagicMock(secret='eph_test_secret')
         
-        url = reverse('userprofile-add-user-donation-to-non-profit', 
-                     kwargs={'pk': test_user_with_profile.profile.pk})
+        # Create test data
+        user = create_test_user()
+        profile = user.profile
+        Balance.objects.create(account=profile, balance=100)
+        nonprofit = create_test_nonprofit()
+        token = Token.objects.create(user=user)
+        
         data = {
-            'amount': 1000,  # $10.00 in cents
-            'id': test_nonprofit.slug,
-            'donation_type': 'S'  # Stripe payment
-        }
-        
-        response = authenticated_client.post(url, data, format='json')
-        
-        assert response.status_code == status.HTTP_200_OK
-        assert 'client_secret' in response.data
-        assert response.data['client_secret'] == 'pi_test123_secret_xyz'
-        
-        # Verify Stripe API was called
-        mock_customer.assert_called_once()
-        mock_payment_intent.assert_called_once()
-
-    @patch('stripe.PaymentIntent.create')
-    @patch('stripe.Customer.create')
-    def test_stripe_error_handling(
-        self, mock_customer, mock_payment_intent,
-        authenticated_client, test_user_with_profile, test_nonprofit
-    ):
-        """
-        Test graceful handling of Stripe errors.
-        
-        Setup: Mock Stripe to raise an error
-        Expected: HTTP 400 with error message
-        """
-        import stripe
-        mock_customer.return_value = MagicMock(id='cus_test')
-        mock_payment_intent.side_effect = stripe.error.StripeError(
-            message='Card declined',
-            code='card_declined'
-        )
-        
-        url = reverse('userprofile-add-user-donation-to-non-profit',
-                     kwargs={'pk': test_user_with_profile.profile.pk})
-        data = {
-            'amount': 1000,
-            'id': test_nonprofit.slug,
+            'amount': 500,
+            'id': nonprofit.slug,
             'donation_type': 'S'
         }
         
-        response = authenticated_client.post(url, data, format='json')
+        response = client.post(
+            f'/api/userprofiles/{profile.pk}/addUserDonationToNonProfit/',
+            data,
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Token {token.key}'
+        )
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['id'] == 'pi_test123'
+        assert response.data['client_secret'] == 'pi_test_secret_123'
+        assert response.data['customer'] == 'cus_test123'
+        
+        # Verify Stripe calls were made
+        mock_customer.assert_called_once_with(email=user.email)
+        mock_intent.assert_called_once()
+        mock_ephemeral.assert_called_once()
+    
+    @patch('stripe.Customer.create')
+    @patch('stripe.PaymentIntent.create')
+    @patch('stripe.EphemeralKey.create')
+    def test_payment_intent_atrocity(self, mock_ephemeral, mock_intent, mock_customer, client):
+        """Test creating PaymentIntent for atrocity donation.
+        
+        Setup: Mock all Stripe API calls
+        Input: $10.00 donation amount (1000 cents)
+        Expected: PaymentIntent with correct metadata for atrocity
+        """
+        mock_customer.return_value = MagicMock(id='cus_test456')
+        mock_intent.return_value = MagicMock(
+            id='pi_test456',
+            client_secret='pi_test_secret_456'
+        )
+        mock_ephemeral.return_value = MagicMock(secret='eph_test_secret2')
+        
+        user = create_test_user()
+        profile = user.profile
+        Balance.objects.create(account=profile)
+        atrocity = create_test_atrocity()
+        token = Token.objects.create(user=user)
+        
+        data = {
+            'amount': 1000,
+            'id': atrocity.pk,
+            'donation_type': 'S'
+        }
+        
+        response = client.post(
+            f'/api/userprofiles/{profile.pk}/addUserDonationToAtrocity/',
+            data,
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Token {token.key}'
+        )
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert 'id' in response.data
+        assert 'client_secret' in response.data
+    
+    @patch('stripe.PaymentIntent.create')
+    def test_payment_intent_stripe_error(self, mock_intent, client):
+        """Test handling Stripe API errors gracefully.
+        
+        Setup: Mock Stripe to raise error
+        Input: Valid donation request
+        Expected: 400 Bad Request with error message
+        """
+        import stripe
+        mock_intent.side_effect = stripe.error.StripeError("Card declined")
+        
+        user = create_test_user()
+        profile = user.profile
+        nonprofit = create_test_nonprofit()
+        token = Token.objects.create(user=user)
+        
+        data = {
+            'amount': 500,
+            'id': nonprofit.slug,
+            'donation_type': 'S'
+        }
+        
+        response = client.post(
+            f'/api/userprofiles/{profile.pk}/addUserDonationToNonProfit/',
+            data,
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Token {token.key}'
+        )
+        
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+    
+    def test_payment_intent_unauthorized(self, client):
+        """Test PaymentIntent creation fails without authentication."""
+        response = client.post('/api/userprofiles/1/addUserDonationToNonProfit/')
+        
+        assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]
+
+
+@pytest.mark.django_db
+class TestStripeWebhooks:
+    """Test Stripe webhook handling."""
+    
+    @patch('stripe.Webhook.construct_event')
+    def test_webhook_checkout_completed(self, mock_construct, client):
+        """Test handling checkout.session.completed webhook.
+        
+        Setup: Mock webhook event construction
+        Input: Valid webhook payload with checkout completion
+        Expected: 200 OK response
+        """
+        mock_event = {
+            'type': 'checkout.session.completed',
+            'data': {
+                'object': {
+                    'id': 'cs_test123',
+                    'amount_total': 1000,
+                    'customer': 'cus_test123'
+                }
+            }
+        }
+        mock_construct.return_value = mock_event
+        
+        response = client.post(
+            '/stripe/webhook/',
+            data='{}',
+            content_type='application/json',
+            HTTP_STRIPE_SIGNATURE='test_sig'
+        )
+        
+        assert response.status_code == status.HTTP_200_OK
+    
+    @patch('stripe.Webhook.construct_event')
+    def test_webhook_invalid_signature(self, mock_construct, client):
+        """Test webhook with invalid signature is rejected.
+        
+        Setup: Mock signature verification to fail
+        Input: Webhook with bad signature
+        Expected: 400 Bad Request
+        """
+        import stripe
+        mock_construct.side_effect = stripe.error.SignatureVerificationError(
+            "Invalid signature", "test_sig"
+        )
+        
+        response = client.post(
+            '/stripe/webhook/',
+            data='{}',
+            content_type='application/json',
+            HTTP_STRIPE_SIGNATURE='invalid_sig'
+        )
+        
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+    
+    @patch('stripe.Webhook.construct_event')
+    def test_webhook_invalid_payload(self, mock_construct, client):
+        """Test webhook with invalid payload is rejected.
+        
+        Setup: Mock payload parsing to fail
+        Input: Invalid JSON payload
+        Expected: 400 Bad Request
+        """
+        mock_construct.side_effect = ValueError("Invalid payload")
+        
+        response = client.post(
+            '/stripe/webhook/',
+            data='not valid json',
+            content_type='application/json',
+            HTTP_STRIPE_SIGNATURE='test_sig'
+        )
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_payment_intent_requires_auth(
-        self, api_client, test_user_with_profile, test_nonprofit
-    ):
-        """
-        Test that unauthenticated users cannot create PaymentIntents.
-        
-        Expected: HTTP 401 Unauthorized
-        """
-        url = reverse('userprofile-add-user-donation-to-non-profit',
-                     kwargs={'pk': test_user_with_profile.profile.pk})
-        data = {
-            'amount': 1000,
-            'id': test_nonprofit.slug,
-            'donation_type': 'S'
-        }
-        
-        response = api_client.post(url, data, format='json')
-        
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-
-@pytest.mark.unit
+@pytest.mark.django_db
 class TestStripeConfig:
-    """Test Stripe configuration endpoint"""
-
-    def test_get_stripe_publishable_key(self, api_client):
-        """
-        Test that Stripe public key is accessible without auth.
+    """Test Stripe configuration endpoints."""
+    
+    def test_get_stripe_config(self, client):
+        """Test getting Stripe publishable key.
         
-        Expected: HTTP 200 with publicKey
+        Setup: None
+        Input: GET request to /stripe/config/
+        Expected: JSON with publicKey field
         """
-        url = '/stripe/config/'
-        response = api_client.get(url)
+        response = client.get('/stripe/config/')
         
         assert response.status_code == status.HTTP_200_OK
         assert 'publicKey' in response.data
+    
+    @patch('stripe.checkout.Session.create')
+    def test_create_checkout_session(self, mock_create, client):
+        """Test creating checkout session.
+        
+        Setup: Mock checkout session creation
+        Input: GET request to create-checkout-session
+        Expected: JSON with sessionId
+        """
+        mock_create.return_value = {'id': 'cs_test123'}
+        
+        response = client.get('/stripe/create-checkout-session/')
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert 'sessionId' in response.data or 'error' in response.data

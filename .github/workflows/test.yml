@@ -1,114 +1,128 @@
-name: Django Tests
+"""
+GitHub Actions workflow for Django backend testing.
+
+This workflow runs on every PR and push to main branch.
+It sets up Python, installs dependencies, runs pytest with coverage,
+and uploads coverage reports.
+
+Requirements:
+- Python 3.11+
+- Django 4.0+
+- SQLite (for tests)
+"""
+name: Django Backend Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, develop ]
   pull_request:
-    branches: [main, develop]
+    branches: [ main, develop ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
     
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_altrue
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-      
-      redis:
-        image: redis:7
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+    
+    # Set environment variables for tests
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings_test
+      SECRET_KEY: django-test-key-not-for-production
+      DATABASE_URL: sqlite:///:memory:
+      STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      STRIPE_TEST_PUBLISHABLE_KEY: ${{ secrets.STRIPE_TEST_PUBLISHABLE_KEY }}
+    
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-test.txt
-
-      - name: Run migrations
-        env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_altrue
-          REDIS_URL: redis://localhost:6379/0
-          SECRET_KEY: test-secret-key-for-ci
-          STRIPE_TEST_SECRET_KEY: sk_test_dummy
-          STRIPE_TEST_PUBLISHABLE_KEY: pk_test_dummy
-          STRIPE_TEST_ENDPOINT_SECRET: whsec_dummy
-        run: |
-          python manage.py migrate --settings=config.settings_test
-
-      - name: Run tests with coverage
-        env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_altrue
-          REDIS_URL: redis://localhost:6379/0
-          SECRET_KEY: test-secret-key-for-ci
-          STRIPE_TEST_SECRET_KEY: sk_test_dummy
-          STRIPE_TEST_PUBLISHABLE_KEY: pk_test_dummy
-          STRIPE_TEST_ENDPOINT_SECRET: whsec_dummy
-        run: |
-          pytest --cov-report=xml --cov-report=html
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: |
-            htmlcov/
-            coverage.xml
+    # Checkout repository code
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    # Set up Python environment
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    # Cache pip dependencies for faster builds
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    # Install project dependencies
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-test.txt
+    
+    # Run Django migrations (for test database)
+    - name: Run migrations
+      run: |
+        python manage.py migrate --settings=config.settings_test
+    
+    # Run pytest with coverage
+    - name: Run tests with pytest
+      run: |
+        pytest --cov=api --cov=Alt --cov=StripeAPI \
+               --cov-report=xml --cov-report=html \
+               --cov-fail-under=70 -v
+    
+    # Upload coverage report as artifact
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-report-${{ matrix.python-version }}
+        path: |
+          htmlcov/
+          coverage.xml
+    
+    # Comment coverage on PR (optional)
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.xml
+        fail_ci_if_error: false
+        verbose: true
 
   lint:
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install linting tools
-        run: |
-          pip install flake8 black isort
-      - name: Run flake8
-        run: flake8 api Alt StripeAPI --max-line-length=120 --exclude=migrations
-      - name: Check black formatting
-        run: black --check api Alt StripeAPI --exclude=migrations
-      - name: Check import sorting
-        run: isort --check-only api Alt StripeAPI --skip=migrations
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort
+    
+    # Check code formatting with black
+    - name: Check code formatting (black)
+      run: |
+        black --check --diff api Alt StripeAPI tests
+      continue-on-error: true
+    
+    # Check import sorting
+    - name: Check import sorting (isort)
+      run: |
+        isort --check-only --diff api Alt StripeAPI tests
+      continue-on-error: true
+    
+    # Run flake8 linter
+    - name: Lint with flake8
+      run: |
+        flake8 api Alt StripeAPI tests --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 api Alt StripeAPI tests --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics

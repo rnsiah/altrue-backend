@@ -1298,3 +1298,916 @@ def updateTotals(instance, created = True, **kwargs):
 
             except: ObjectDoesNotExist
         pass
+
+
+# ============================================================================
+# COMPANY ECOSYSTEM MODELS - Phase 1 Implementation
+# ============================================================================
+# These models support the company tiered ecosystem with escrow wallets,
+# campaign management, and enhanced rewards system.
+# ============================================================================
+
+class CompanyTier(models.Model):
+    """
+    Tracks company subscription tier and billing configuration.
+    Free: 3% transaction fee, Pro: $299/mo + 1%, Enterprise: $999/mo + 0.5%
+    """
+    TIER_CHOICES = [
+        ('free', 'Free'),
+        ('pro', 'Pro ($299/mo)'),
+        ('enterprise', 'Enterprise ($999/mo)'),
+    ]
+    
+    company = models.OneToOneField(
+        'Alt.ForProfitCompany', 
+        on_delete=models.CASCADE,
+        related_name='tier'
+    )
+    tier = models.CharField(
+        max_length=20, 
+        choices=TIER_CHOICES, 
+        default='free'
+    )
+    monthly_fee = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0.00
+    )
+    transaction_fee_percent = models.DecimalField(
+        max_digits=4, 
+        decimal_places=2, 
+        default=3.00  # 3% for free tier
+    )
+    stripe_subscription_id = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True
+    )
+    stripe_customer_id = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Company Tier"
+        verbose_name_plural = "Company Tiers"
+    
+    def __str__(self):
+        return f"{self.company.name} - {self.get_tier_display()}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-set fees based on tier
+        if self.tier == 'free':
+            self.monthly_fee = 0.00
+            self.transaction_fee_percent = 3.00
+        elif self.tier == 'pro':
+            self.monthly_fee = 299.00
+            self.transaction_fee_percent = 1.00
+        elif self.tier == 'enterprise':
+            self.monthly_fee = 999.00
+            self.transaction_fee_percent = 0.50
+        super().save(*args, **kwargs)
+
+
+class CompanyWallet(models.Model):
+    """
+    Escrow wallet for company matching funds.
+    Companies pre-fund this wallet (30% of budget) before matches are made.
+    This ensures Altrue has no upfront liability.
+    """
+    company = models.OneToOneField(
+        'Alt.ForProfitCompany', 
+        on_delete=models.CASCADE,
+        related_name='matching_wallet'
+    )
+    # Available balance for matching
+    balance = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0.00
+    )
+    # Monthly budget cap set by company
+    monthly_budget = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0.00
+    )
+    # Amount matched this month
+    matched_this_month = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0.00
+    )
+    # Auto-pause matching when balance below this threshold
+    auto_pause_threshold = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=50.00
+    )
+    # Auto-refill settings
+    auto_refill_enabled = models.BooleanField(default=False)
+    auto_refill_threshold = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=100.00
+    )
+    auto_refill_amount = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=500.00
+    )
+    # Status
+    is_active = models.BooleanField(default=True)
+    is_paused = models.BooleanField(default=False)
+    paused_at = models.DateTimeField(null=True, blank=True)
+    pause_reason = models.TextField(blank=True, null=True)
+    # Tracking
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Company Matching Wallet"
+        verbose_name_plural = "Company Matching Wallets"
+    
+    def __str__(self):
+        return f"{self.company.name} Wallet - ${self.balance}"
+    
+    @property
+    def remaining_budget(self):
+        """Calculate remaining budget for current month"""
+        return self.monthly_budget - self.matched_this_month
+    
+    @property
+    def can_match(self):
+        """Check if company has sufficient funds for matching"""
+        return (
+            self.is_active and 
+            not self.is_paused and 
+            self.balance > self.auto_pause_threshold and
+            self.remaining_budget > 0
+        )
+    
+    def check_and_pause(self):
+        """Auto-pause matching if balance below threshold"""
+        if self.balance < self.auto_pause_threshold and not self.is_paused:
+            self.is_paused = True
+            self.paused_at = timezone.now()
+            self.pause_reason = "Balance below auto-pause threshold"
+            self.save()
+            return True
+        return False
+
+
+class CompanyApplication(models.Model):
+    """
+    Application workflow for companies wanting to join Altrue.
+    Includes vetting process with manual review.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('under_review', 'Under Review'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+    
+    # Company Information
+    company_name = models.CharField(max_length=255)
+    ein = models.CharField(max_length=20)
+    website = models.URLField()
+    mission_statement = models.TextField()
+    description = models.TextField()
+    
+    # Annual commitment (minimum $10,000)
+    annual_matching_commitment = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2
+    )
+    
+    # Contact Information
+    contact_name = models.CharField(max_length=255)
+    contact_email = models.EmailField()
+    contact_phone = models.CharField(max_length=20, blank=True, null=True)
+    
+    # Address
+    street_address = models.CharField(max_length=255, blank=True, null=True)
+    city = models.CharField(max_length=100, blank=True, null=True)
+    state = models.CharField(max_length=50, blank=True, null=True)
+    zip_code = models.CharField(max_length=20, blank=True, null=True)
+    country = CountryField(blank=True, null=True)
+    
+    # Supporting Documents
+    logo_url = models.CharField(max_length=500, blank=True, null=True)
+    
+    # Application Status
+    status = models.CharField(
+        max_length=20, 
+        choices=STATUS_CHOICES, 
+        default='pending'
+    )
+    
+    # Review Information
+    applied_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        'api.User', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
+    )
+    rejection_reason = models.TextField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    
+    # If approved, link to created company
+    approved_company = models.OneToOneField(
+        'Alt.ForProfitCompany',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='application'
+    )
+    
+    # EIN verification
+    ein_verified = models.BooleanField(default=False)
+    ein_verification_data = models.JSONField(blank=True, null=True)
+    
+    class Meta:
+        verbose_name = "Company Application"
+        verbose_name_plural = "Company Applications"
+        ordering = ['-applied_at']
+    
+    def __str__(self):
+        return f"{self.company_name} - {self.get_status_display()}"
+
+
+class CompanyMatchCampaign(models.Model):
+    """
+    Time-limited matching campaigns with escrow funding.
+    Companies pre-fund 30% of campaign budget before launch.
+    """
+    CAMPAIGN_STATUS = [
+        ('draft', 'Draft'),
+        ('pending_funding', 'Pending Funding'),
+        ('active', 'Active'),
+        ('paused', 'Paused'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    company = models.ForeignKey(
+        'Alt.ForProfitCompany',
+        on_delete=models.CASCADE,
+        related_name='campaigns'
+    )
+    
+    # Campaign Details
+    name = models.CharField(max_length=255)
+    description = models.TextField()
+    slug = models.SlugField(unique=True, blank=True, null=True)
+    
+    # Match Configuration
+    match_multiplier = models.DecimalField(
+        max_digits=3, 
+        decimal_places=1, 
+        default=1.0,
+        help_text="1.0 = 100% match, 2.0 = 2x match, etc."
+    )
+    max_match_per_donation = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Maximum match amount per individual donation"
+    )
+    
+    # Campaign Timing
+    start_date = models.DateTimeField()
+    end_date = models.DateTimeField()
+    
+    # Budget & Escrow
+    budget_cap = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2,
+        help_text="Maximum total matching for this campaign"
+    )
+    required_escrow = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2,
+        help_text="30% pre-funding required (auto-calculated)"
+    )
+    escrow_funded = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0.00
+    )
+    amount_matched = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0.00
+    )
+    
+    # Eligibility
+    eligible_causes = models.ManyToManyField(
+        'Alt.Category',
+        blank=True,
+        related_name='campaigns'
+    )
+    eligible_nonprofits = models.ManyToManyField(
+        'Alt.NonProfit',
+        blank=True,
+        related_name='campaigns'
+    )
+    min_donation_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        blank=True,
+        null=True
+    )
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=CAMPAIGN_STATUS,
+        default='draft'
+    )
+    
+    # Shirt Sponsorship (optional)
+    shirt_sponsorship_enabled = models.BooleanField(default=False)
+    sponsor_logo_placement = models.CharField(
+        max_length=50,
+        choices=[
+            ('sleeve', 'Sleeve'),
+            ('back', 'Back'),
+            ('front_small', 'Front Small'),
+        ],
+        default='sleeve',
+        blank=True,
+        null=True
+    )
+    sponsor_shirt = models.ForeignKey(
+        'Alt.Shirt',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='campaign_sponsorships'
+    )
+    
+    # Analytics
+    total_donations_matched = models.IntegerField(default=0)
+    unique_donors = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    launched_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        verbose_name = "Company Match Campaign"
+        verbose_name_plural = "Company Match Campaigns"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.company.name} - {self.name}"
+    
+    def save(self, *args, **kwargs):
+        # Calculate required escrow (30% of budget)
+        if self.budget_cap:
+            self.required_escrow = self.budget_cap * Decimal('0.30')
+        
+        # Auto-generate slug if not set
+        if not self.slug:
+            from django.template.defaultfilters import slugify
+            base_slug = slugify(f"{self.company.name}-{self.name}")
+            self.slug = base_slug
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def remaining_budget(self):
+        return self.budget_cap - self.amount_matched
+    
+    @property
+    def is_fully_funded(self):
+        return self.escrow_funded >= self.required_escrow
+    
+    @property
+    def escrow_remaining(self):
+        """Remaining escrow after matches"""
+        return self.escrow_funded - self.amount_matched
+    
+    def can_launch(self):
+        """Check if campaign can be launched"""
+        return (
+            self.status == 'pending_funding' and
+            self.is_fully_funded and
+            self.start_date > timezone.now()
+        )
+
+
+class CampaignEscrowTransaction(models.Model):
+    """
+    Tracks all escrow funding and match transactions for campaigns.
+    """
+    TRANSACTION_TYPES = [
+        ('deposit', 'Deposit'),
+        ('match', 'Match Deduction'),
+        ('refund', 'Refund'),
+        ('overage_charge', 'Overage Charge'),
+    ]
+    
+    campaign = models.ForeignKey(
+        CompanyMatchCampaign,
+        on_delete=models.CASCADE,
+        related_name='escrow_transactions'
+    )
+    transaction_type = models.CharField(
+        max_length=20,
+        choices=TRANSACTION_TYPES
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    description = models.TextField(blank=True, null=True)
+    
+    # For match transactions, link to donation
+    donation = models.ForeignKey(
+        'api.UserDonation',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='campaign_match'
+    )
+    
+    # Stripe payment intent (for deposits/charges)
+    stripe_payment_intent_id = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Campaign Escrow Transaction"
+        verbose_name_plural = "Campaign Escrow Transactions"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.campaign.name} - {self.transaction_type}: ${self.amount}"
+
+
+class CompanyInvoice(models.Model):
+    """
+    Monthly billing for company subscription and transaction fees.
+    """
+    INVOICE_STATUS = [
+        ('pending', 'Pending'),
+        ('paid', 'Paid'),
+        ('failed', 'Failed'),
+        ('refunded', 'Refunded'),
+    ]
+    
+    company = models.ForeignKey(
+        'Alt.ForProfitCompany',
+        on_delete=models.CASCADE,
+        related_name='invoices'
+    )
+    
+    # Billing Period
+    month = models.DateField()
+    
+    # Amounts
+    monthly_fee = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0.00
+    )
+    total_matched = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0.00
+    )
+    transaction_fee_percent = models.DecimalField(
+        max_digits=4, 
+        decimal_places=2, 
+        default=0.00
+    )
+    altrue_fee = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0.00
+    )
+    total_due = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0.00
+    )
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=INVOICE_STATUS,
+        default='pending'
+    )
+    
+    # Stripe
+    stripe_invoice_id = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True
+    )
+    stripe_payment_intent_id = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        verbose_name = "Company Invoice"
+        verbose_name_plural = "Company Invoices"
+        ordering = ['-month']
+        unique_together = ['company', 'month']
+    
+    def __str__(self):
+        return f"{self.company.name} - {self.month.strftime('%B %Y')} - ${self.total_due}"
+    
+    def calculate_fees(self):
+        """Calculate Altrue fees based on matched amount"""
+        self.altrue_fee = (self.total_matched * self.transaction_fee_percent) / 100
+        self.total_due = self.monthly_fee + self.altrue_fee
+        self.save()
+
+
+class CompanyReward(models.Model):
+    """
+    Enhanced reward system for company-sponsored perks.
+    Rewards live in user's Altrue Wallet for full analytics tracking.
+    """
+    REWARD_TYPES = [
+        ('digital', 'Digital (Coupon/Code)'),
+        ('physical', 'Physical Product'),
+        ('experience', 'Experience/Event'),
+    ]
+    
+    REWARD_STATUS = [
+        ('draft', 'Draft'),
+        ('active', 'Active'),
+        ('paused', 'Paused'),
+        ('expired', 'Expired'),
+        ('depleted', 'Depleted'),
+    ]
+    
+    company = models.ForeignKey(
+        'Alt.ForProfitCompany',
+        on_delete=models.CASCADE,
+        related_name='rewards'
+    )
+    
+    # Basic Info
+    name = models.CharField(max_length=255)
+    description = models.TextField()
+    reward_type = models.CharField(
+        max_length=20,
+        choices=REWARD_TYPES
+    )
+    image_url = models.CharField(max_length=500, blank=True, null=True)
+    
+    # Unlock Criteria (can combine multiple)
+    min_donation_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Minimum donation to unlock this reward"
+    )
+    min_altrue_level = models.IntegerField(
+        blank=True,
+        null=True,
+        help_text="Minimum Altrue level required"
+    )
+    min_streak_days = models.IntegerField(
+        blank=True,
+        null=True,
+        help_text="Minimum donation streak days"
+    )
+    specific_cause = models.ForeignKey(
+        'Alt.Category',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rewards'
+    )
+    specific_nonprofit = models.ForeignKey(
+        'Alt.NonProfit',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rewards'
+    )
+    
+    # Campaign-specific reward (optional)
+    campaign = models.ForeignKey(
+        CompanyMatchCampaign,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rewards'
+    )
+    
+    # Fulfillment
+    total_quantity = models.IntegerField(
+        help_text="Total available rewards (0 = unlimited)"
+    )
+    claimed_count = models.IntegerField(default=0)
+    
+    # For physical rewards
+    shipping_required = models.BooleanField(default=False)
+    estimated_delivery_days = models.IntegerField(blank=True, null=True)
+    
+    # For digital rewards
+    code_prefix = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Prefix for auto-generated codes (e.g., 'NIKE25')"
+    )
+    
+    # Availability
+    start_date = models.DateTimeField(null=True, blank=True)
+    expiration_date = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=REWARD_STATUS,
+        default='draft'
+    )
+    
+    # Analytics
+    views_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Company Reward"
+        verbose_name_plural = "Company Rewards"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.company.name} - {self.name}"
+    
+    @property
+    def remaining_quantity(self):
+        if self.total_quantity == 0:  # Unlimited
+            return -1
+        return self.total_quantity - self.claimed_count
+    
+    @property
+    def is_available(self):
+        now = timezone.now()
+        return (
+            self.status == 'active' and
+            (self.start_date is None or self.start_date <= now) and
+            (self.expiration_date is None or self.expiration_date > now) and
+            (self.total_quantity == 0 or self.remaining_quantity > 0)
+        )
+
+
+class CompanyRewardCode(models.Model):
+    """
+    Individual coupon codes for digital rewards.
+    Bulk uploaded or auto-generated.
+    """
+    reward = models.ForeignKey(
+        CompanyReward,
+        on_delete=models.CASCADE,
+        related_name='codes'
+    )
+    code = models.CharField(max_length=255)
+    
+    # Claim tracking
+    is_claimed = models.BooleanField(default=False)
+    claimed_by = models.ForeignKey(
+        'api.UserProfile',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='claimed_reward_codes'
+    )
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Expiration (optional - can differ from reward expiration)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    
+    # Redemption tracking
+    is_redeemed = models.BooleanField(default=False)
+    redeemed_at = models.DateTimeField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Company Reward Code"
+        verbose_name_plural = "Company Reward Codes"
+        unique_together = ['reward', 'code']
+    
+    def __str__(self):
+        return f"{self.reward.name} - {self.code[:10]}..."
+
+
+class UserRewardClaim(models.Model):
+    """
+    Tracks user's rewards through the full lifecycle:
+    unlocked -> viewed -> claimed -> redeemed
+    """
+    REWARD_STATUS = [
+        ('unlocked', 'Unlocked'),
+        ('viewed', 'Viewed'),
+        ('claimed', 'Claimed'),
+        ('fulfilled', 'Fulfilled'),
+        ('redeemed', 'Redeemed'),
+        ('expired', 'Expired'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    user = models.ForeignKey(
+        'api.UserProfile',
+        on_delete=models.CASCADE,
+        related_name='reward_claims'
+    )
+    reward = models.ForeignKey(
+        CompanyReward,
+        on_delete=models.CASCADE,
+        related_name='user_claims'
+    )
+    
+    # Status tracking
+    status = models.CharField(
+        max_length=20,
+        choices=REWARD_STATUS,
+        default='unlocked'
+    )
+    
+    # For digital rewards
+    reward_code = models.ForeignKey(
+        CompanyRewardCode,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='claims'
+    )
+    
+    # For physical rewards - shipping
+    shipping_address = models.TextField(blank=True, null=True)
+    tracking_number = models.CharField(max_length=100, blank=True, null=True)
+    shipped_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    
+    # Unlock trigger
+    unlocked_by_donation = models.ForeignKey(
+        'api.UserDonation',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='unlocked_rewards'
+    )
+    
+    # Analytics timestamps
+    unlocked_at = models.DateTimeField(auto_now_add=True)
+    viewed_at = models.DateTimeField(null=True, blank=True)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    redeemed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Notifications
+    notification_sent = models.BooleanField(default=False)
+    reminder_sent = models.BooleanField(default=False)
+    
+    class Meta:
+        verbose_name = "User Reward Claim"
+        verbose_name_plural = "User Reward Claims"
+        ordering = ['-unlocked_at']
+        unique_together = ['user', 'reward']  # One claim per user per reward
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.reward.name} - {self.status}"
+    
+    def mark_viewed(self):
+        if self.status == 'unlocked':
+            self.status = 'viewed'
+            self.viewed_at = timezone.now()
+            self.save()
+    
+    def mark_claimed(self, reward_code=None):
+        if self.status in ['unlocked', 'viewed']:
+            self.status = 'claimed'
+            self.claimed_at = timezone.now()
+            if reward_code:
+                self.reward_code = reward_code
+            self.save()
+    
+    def mark_redeemed(self):
+        if self.status == 'claimed':
+            self.status = 'redeemed'
+            self.redeemed_at = timezone.now()
+            self.save()
+            if self.reward_code:
+                self.reward_code.is_redeemed = True
+                self.reward_code.redeemed_at = timezone.now()
+                self.reward_code.save()
+
+
+class WalletTransaction(models.Model):
+    """
+    Tracks all deposits/withdrawals from company matching wallets.
+    """
+    TRANSACTION_TYPES = [
+        ('deposit', 'Deposit'),
+        ('match', 'Match Payment'),
+        ('refund', 'Refund'),
+        ('auto_refill', 'Auto Refill'),
+        ('campaign_escrow', 'Campaign Escrow Transfer'),
+    ]
+    
+    wallet = models.ForeignKey(
+        CompanyWallet,
+        on_delete=models.CASCADE,
+        related_name='transactions'
+    )
+    transaction_type = models.CharField(
+        max_length=20,
+        choices=TRANSACTION_TYPES
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    description = models.TextField(blank=True, null=True)
+    
+    # Stripe reference
+    stripe_payment_intent_id = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True
+    )
+    
+    # For match payments
+    matched_donation = models.ForeignKey(
+        'api.UserDonation',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='wallet_transaction'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Wallet Transaction"
+        verbose_name_plural = "Wallet Transactions"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.wallet.company.name} - {self.transaction_type}: ${self.amount}"
+
+
+# ============================================================================
+# SIGNALS FOR COMPANY ECOSYSTEM
+# ============================================================================
+
+@receiver(post_save, sender=ForProfitCompany)
+def create_company_ecosystem_models(sender, instance, created, **kwargs):
+    """
+    Create associated models when a company is created.
+    """
+    if created:
+        # Create CompanyTier (default to free)
+        CompanyTier.objects.get_or_create(
+            company=instance,
+            defaults={'tier': 'free'}
+        )
+        
+        # Create CompanyWallet
+        CompanyWallet.objects.get_or_create(
+            company=instance,
+            defaults={'monthly_budget': 0.00}
+        )
+
+
+@receiver(post_save, sender=CompanyApplication)
+def handle_application_approval(sender, instance, **kwargs):
+    """
+    When application is approved, create the ForProfitCompany.
+    """
+    if instance.status == 'approved' and not instance.approved_company:
+        # Create the company
+        company = ForProfitCompany.objects.create(
+            owner=None,  # Will need to be linked to a user account
+            name=instance.company_name,
+            mission=instance.mission_statement,
+            description=instance.description,
+            website_address=instance.website,
+            year_started=str(timezone.now().year),
+            logo=instance.logo_url or 'https://i.ibb.co/yPCqbSG/altruecompany-placeholder.png'
+        )
+        
+        # Link application to company
+        instance.approved_company = company
+        instance.save(update_fields=['approved_company'])

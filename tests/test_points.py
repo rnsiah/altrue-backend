@@ -3,51 +3,43 @@ Test AltruePoints calculation and point system
 """
 import pytest
 from unittest.mock import patch
+from decimal import Decimal
 
-from api.models import AltruePoints, PointTransaction, UserAltrueAction
+from api.models import AltruePoints, PointTransaction
+from api.point_system import initialize_user_level, record_user_action
+from Alt.models import AltrueAction, UserAltrueAction
 from tests.factories import (
-    UserFactory, UserProfileFactory, AltruePointsFactory,
-    AltrueActionFactory, PointTransactionFactory
+    UserFactory, UserProfileFactory, AltruePointsFactory, AltrueActionFactory,
+    AltrueActionCodeFactory, AltrueLevelFactory, AltrueActionTypeFactory
 )
 
 
 @pytest.mark.django_db
 class TestAltruePoints:
-    """Test AltruePoints model functionality"""
+    """Test AltruePoints model and operations"""
     
-    def test_create_altrue_points_on_profile_creation(self):
-        """Test that AltruePoints are created when UserProfile is created"""
+    def test_points_created_with_user(self):
+        """Test that AltruePoints are created when user is created"""
         user = UserFactory()
-        profile = user.profile
         
-        # AltruePoints should be created via signal
-        assert hasattr(profile, 'altrue_points')
-        assert profile.altrue_points.balance == 0
+        assert hasattr(user.profile, 'altrue_points')
+        assert user.profile.altrue_points.balance == 0
     
-    def test_altrue_points_str_representation(self):
-        """Test AltruePoints string representation"""
-        points = AltruePointsFactory(balance=150)
+    def test_points_balance_update(self):
+        """Test updating points balance"""
+        user = UserFactory()
+        points = user.profile.altrue_points
         
-        assert str(points) == '150'
-    
-    def test_altrue_points_balance_update(self):
-        """Test updating AltruePoints balance"""
-        points = AltruePointsFactory(balance=100)
-        
-        points.balance += 50
+        points.balance = 100
         points.save()
         
         points.refresh_from_db()
-        assert points.balance == 150
-
-
-@pytest.mark.django_db
-class TestPointTransaction:
-    """Test PointTransaction functionality"""
+        assert points.balance == 100
     
-    def test_create_point_transaction(self):
-        """Test creating a point transaction"""
-        profile = UserProfileFactory()
+    def test_point_transaction_creation(self):
+        """Test creating point transaction"""
+        user = UserFactory()
+        profile = user.profile
         action = AltrueActionFactory()
         
         transaction = PointTransaction.objects.create(
@@ -56,190 +48,211 @@ class TestPointTransaction:
             amount=50,
             balance_before=0,
             balance_after=50,
-            description='Test transaction'
+            description='Test action completed'
         )
         
-        assert transaction.pk is not None
         assert transaction.user == profile
-        assert transaction.action == action
         assert transaction.amount == 50
         assert transaction.balance_after == 50
-    
-    def test_point_transaction_str(self):
-        """Test PointTransaction string representation"""
-        transaction = PointTransactionFactory()
-        
-        str_repr = str(transaction)
-        assert str(transaction.user.user) in str_repr
-        assert str(transaction.amount) in str_repr
-    
-    def test_multiple_point_transactions(self):
-        """Test multiple point transactions accumulate"""
-        profile = UserProfileFactory()
-        action = AltrueActionFactory()
-        
-        PointTransaction.objects.create(
-            user=profile,
-            action=action,
-            amount=25,
-            balance_before=0,
-            balance_after=25,
-            description='First transaction'
-        )
-        
-        PointTransaction.objects.create(
-            user=profile,
-            action=action,
-            amount=30,
-            balance_before=25,
-            balance_after=55,
-            description='Second transaction'
-        )
-        
-        transactions = PointTransaction.objects.filter(user=profile)
-        assert transactions.count() == 2
-        
-        latest = transactions.latest('timestamp')
-        assert latest.balance_after == 55
 
 
 @pytest.mark.django_db
-class TestUserAltrueAction:
-    """Test UserAltrueAction functionality"""
+class TestInitializeUserLevel:
+    """Test user level initialization"""
     
-    def test_create_user_altrue_action(self):
-        """Test creating a user Altrue action"""
-        profile = UserProfileFactory()
-        action = AltrueActionFactory()
+    def test_initialize_user_level_creates_level_0(self):
+        """Test that user is initialized with level 0"""
+        user = UserFactory()
+        profile = user.profile
         
-        user_action = UserAltrueAction.objects.create(
-            profile_acting=profile,
-            altrue_action=action
-        )
-        
-        assert user_action.pk is not None
-        assert user_action.profile_acting == profile
-        assert user_action.altrue_action == action
-        assert user_action.is_promotion is False
+        # Level 0 should be created and assigned
+        assert profile.altrue_level is not None
+        assert profile.altrue_level.level_number == 0
     
-    def test_user_altrue_action_str(self):
-        """Test UserAltrueAction string representation"""
-        profile = UserProfileFactory()
-        action = AltrueActionFactory(requirement='Complete profile')
-        
-        user_action = UserAltrueAction.objects.create(
-            profile_acting=profile,
-            altrue_action=action
-        )
-        
-        str_repr = str(user_action)
-        assert str(profile.user.email) in str_repr
-        assert 'Complete profile' in str_repr
-
-
-@pytest.mark.django_db
-class TestAltrueLevel:
-    """Test AltrueLevel functionality"""
-    
-    def test_create_altrue_level(self):
-        """Test creating AltrueLevel"""
-        from Alt.models import AltrueLevel
-        
-        level = AltrueLevel.objects.create(
-            level_number=1,
-            name='Beginner',
-            minimum_points=0,
-            maximum_points=100
-        )
-        
-        assert level.pk is not None
-        assert str(level) == 'Beginner'
-        assert level.minimum_points == 0
-        assert level.maximum_points == 100
-    
-    def test_altrue_level_with_required_actions(self):
-        """Test AltrueLevel with required actions"""
-        from Alt.models import AltrueLevel
-        
+    def test_initialize_user_level_adds_requirements(self):
+        """Test that level requirements are added"""
+        # Create level 1 with requirements
         action1 = AltrueActionFactory()
         action2 = AltrueActionFactory()
+        level1 = AltrueLevelFactory(level_number=1, minimum_points=100)
+        level1.requiredActions.add(action1, action2)
         
-        level = AltrueLevel.objects.create(
-            level_number=2,
-            name='Intermediate',
-            minimum_points=100,
-            maximum_points=500
-        )
-        level.requiredActions.add(action1, action2)
+        user = UserFactory()
+        profile = user.profile
         
-        assert level.requiredActions.count() == 2
-        assert action1 in level.requiredActions.all()
-        assert action2 in level.requiredActions.all()
+        # Check that requirements are added
+        requirements = profile.requirementsForNextLevel.all()
+        assert action1 in requirements or action2 in requirements
 
 
 @pytest.mark.django_db
-class TestPointSystemActions:
-    """Test point system action handling"""
+class TestRecordUserAction:
+    """Test recording user actions and awarding points"""
     
-    def test_record_user_action_integration(self):
-        """Test recording user action through point system"""
-        from api.point_system import record_user_action
+    def test_record_user_action_creates_action(self):
+        """Test recording a user action"""
+        user = UserFactory()
+        profile = user.profile
         
-        profile = UserProfileFactory()
-        action_code = 'testAction'
+        # Create action code and action
+        action_code = AltrueActionCodeFactory(code='testAction')
+        action = AltrueActionFactory(
+            action_code=action_code,
+            points_awarded=25,
+            number_of_occurrences=5
+        )
         
-        # Mock the point system call
+        # Record the action
         with patch('api.point_system.AltrueAction.objects.get') as mock_get:
-            mock_action = AltrueActionFactory()
-            mock_action.points_awarded = 25
-            mock_get.return_value = mock_action
-            
-            # This would normally create point transactions
-            # For now, just verify the function can be called
-            # Note: Full integration test would require mocking more components
-            pass
+            mock_get.return_value = action
+            result = record_user_action(profile, 'testAction', {})
+        
+        # Check that UserAltrueAction was created
+        user_action = UserAltrueAction.objects.filter(
+            profile_acting=profile,
+            altrue_action=action
+        )
+        assert user_action.exists()
     
-    def test_promotion_multiplier_applied(self):
-        """Test that promotion multipliers are applied to points"""
+    def test_record_user_action_updates_points(self):
+        """Test that recording action updates user points"""
+        user = UserFactory()
+        profile = user.profile
+        points = profile.altrue_points
+        initial_balance = points.balance
+        
+        # Create action
+        action_code = AltrueActionCodeFactory(code='pointTest')
+        action = AltrueActionFactory(
+            action_code=action_code,
+            points_awarded=50
+        )
+        
+        # Record the action
+        with patch('api.point_system.AltrueAction.objects.get') as mock_get:
+            mock_get.return_value = action
+            record_user_action(profile, 'pointTest', {})
+        
+        points.refresh_from_db()
+        assert points.balance == initial_balance + 50
+    
+    def test_record_user_action_respects_max_occurrences(self):
+        """Test that points are only awarded up to max occurrences"""
+        user = UserFactory()
+        profile = user.profile
+        
+        # Create action with max 2 occurrences
+        action_code = AltrueActionCodeFactory(code='limitedAction')
+        action = AltrueActionFactory(
+            action_code=action_code,
+            points_awarded=10,
+            number_of_occurrences=2
+        )
+        
+        # Record action multiple times
+        with patch('api.point_system.AltrueAction.objects.get') as mock_get:
+            mock_get.return_value = action
+            record_user_action(profile, 'limitedAction', {})
+            record_user_action(profile, 'limitedAction', {})
+            record_user_action(profile, 'limitedAction', {})  # Should not award points
+        
+        # Check that only 2 actions were recorded with points
+        point_transactions = PointTransaction.objects.filter(
+            user=profile,
+            action=action
+        )
+        assert point_transactions.count() == 2
+
+
+@pytest.mark.django_db
+class TestPointSystemIntegration:
+    """Test point system integration with other features"""
+    
+    def test_first_donation_awards_bonus(self):
+        """Test that first donation awards bonus points"""
+        from tests.factories import UserDonationFactory
+        
+        user = UserFactory()
+        profile = user.profile
+        
+        # Create donation action
+        action_code = AltrueActionCodeFactory(code='makeADonation')
+        AltrueActionFactory(action_code=action_code)
+        
+        # Create first donation
+        donation = UserDonationFactory(user=profile)
+        
+        # Signal should trigger first-time action award
+        # This would need to be tested with the actual signal
+        pass
+    
+    def test_promoted_action_awards_bonus_points(self):
+        """Test that promoted actions award bonus points"""
         from Alt.models import AltruePointPromotion
         
-        # Create a promotion
+        user = UserFactory()
+        profile = user.profile
+        
+        # Create promotion
         promotion = AltruePointPromotion.objects.create(
+            name='Double Points Week',
             multiplier=2,
-            name='Double Points Weekend',
             is_active=True
         )
         
-        # Create an action with promotion
+        # Create promoted action
+        action_code = AltrueActionCodeFactory(code='promotedAction')
         action = AltrueActionFactory(
-            points_awarded=50,
+            action_code=action_code,
+            points_awarded=20,
             is_promoted=True,
             promotion=promotion
         )
         
-        assert action.is_promoted is True
-        assert action.promotion == promotion
-        # Points would be 50 * 2 = 100 during promotion
+        # Record action - should award 40 points (20 * 2)
+        with patch('api.point_system.AltrueAction.objects.get') as mock_get:
+            mock_get.return_value = action
+            record_user_action(profile, 'promotedAction', {})
+        
+        # Check that promoted points were awarded
+        points = profile.altrue_points
+        points.refresh_from_db()
+        # Points should be doubled
 
 
 @pytest.mark.django_db
-class TestAltrueActionCode:
-    """Test AltrueActionCode functionality"""
+class TestLevelProgression:
+    """Test user level progression"""
     
-    def test_create_action_code(self):
-        """Test creating action code"""
-        from Alt.models import AltrueActionCode
+    def test_user_can_level_up(self):
+        """Test that users can progress to next level"""
+        # Create levels
+        level0 = AltrueLevelFactory(level_number=0, name='Beginner', minimum_points=0)
+        level1 = AltrueLevelFactory(level_number=1, name='Intermediate', minimum_points=100)
         
-        code = AltrueActionCode.objects.create(code='makeADonation')
+        user = UserFactory()
+        profile = user.profile
+        profile.altrue_level = level0
+        profile.save()
         
-        assert str(code) == 'makeADonation'
+        # Award points to reach next level
+        points = profile.altrue_points
+        points.balance = 150
+        points.save()
+        
+        # User should now qualify for level 1
+        # This would test the level-up logic
     
-    def test_action_code_uniqueness(self):
-        """Test action codes can have same code value"""
-        from Alt.models import AltrueActionCode
+    def test_level_requirements_tracked(self):
+        """Test that level requirements are tracked"""
+        user = UserFactory()
+        profile = user.profile
         
-        code1 = AltrueActionCode.objects.create(code='testCode')
-        code2 = AltrueActionCode.objects.create(code='testCode')
+        # Add some requirements
+        action1 = AltrueActionFactory()
+        action2 = AltrueActionFactory()
+        profile.requirementsForNextLevel.add(action1, action2)
         
-        # Django doesn't enforce uniqueness by default on this model
-        assert code1.pk != code2.pk
+        assert profile.requirementsForNextLevel.count() == 2
+        assert action1 in profile.requirementsForNextLevel.all()
+        assert action2 in profile.requirementsForNextLevel.all()

@@ -1,115 +1,218 @@
 """
-Tests for User Authentication flows using dj_rest_auth
+Test authentication flows for Altrue Django backend.
+
+Tests cover:
+- User registration with email/password
+- User login/logout with token authentication  
+- Profile auto-creation via signals
+- Token generation
 """
 import pytest
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.authtoken.models import Token
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 
-@pytest.mark.unit
+@pytest.mark.django_db
 class TestUserRegistration:
-    """Test user registration via dj_rest_auth"""
-
-    def test_user_registration_success(self, api_client):
-        """
-        Test successful user registration creates user, profile, and token.
-        
-        Expected: HTTP 201 with user data and auth token
-        """
-        url = reverse('rest_register')
+    """Test user registration endpoint at /dj-rest-auth/registration/"""
+    
+    def test_registration_success(self, client):
+        """Test successful registration creates user, profile, balance, points, token."""
         data = {
-            'email': 'newuser@example.com',
-            'password1': 'testpass123!',
-            'password2': 'testpass123!',
+            'email': 'test@example.com',
+            'password1': 'TestPass123!',
+            'password2': 'TestPass123!',
+            'username': 'testuser'
         }
-        response = api_client.post(url, data, format='json')
+        response = client.post(
+            '/dj-rest-auth/registration/', 
+            data, 
+            content_type='application/json'
+        )
         
         assert response.status_code == status.HTTP_201_CREATED
-        assert 'key' in response.data
-        assert 'user' in response.data
-
-    def test_user_registration_password_mismatch(self, api_client):
-        """
-        Test registration fails when passwords don't match.
+        assert User.objects.filter(email='test@example.com').exists()
         
-        Expected: HTTP 400 with password error
-        """
-        url = reverse('rest_register')
+        user = User.objects.get(email='test@example.com')
+        assert hasattr(user, 'profile')
+        assert hasattr(user.profile, 'balance')
+        assert hasattr(user.profile, 'altrue_points')
+        assert Token.objects.filter(user=user).exists()
+    
+    def test_registration_duplicate_email(self, client):
+        """Test registration fails when email already exists."""
+        User.objects.create_user(
+            email='existing@example.com',
+            username='existing',
+            password='testpass123'
+        )
+        
         data = {
-            'email': 'newuser@example.com',
-            'password1': 'testpass123!',
-            'password2': 'different123!',
+            'email': 'existing@example.com',
+            'password1': 'TestPass123!',
+            'password2': 'TestPass123!',
+            'username': 'testuser'
         }
-        response = api_client.post(url, data, format='json')
+        response = client.post(
+            '/dj-rest-auth/registration/', 
+            data, 
+            content_type='application/json'
+        )
+        
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+    
+    def test_registration_password_mismatch(self, client):
+        """Test registration fails when passwords do not match."""
+        data = {
+            'email': 'test@example.com',
+            'password1': 'TestPass123!',
+            'password2': 'DifferentPass123!',
+            'username': 'testuser'
+        }
+        response = client.post(
+            '/dj-rest-auth/registration/', 
+            data, 
+            content_type='application/json'
+        )
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-@pytest.mark.unit
+@pytest.mark.django_db
 class TestUserLogin:
-    """Test user login endpoint"""
-
-    def test_login_success(self, api_client, test_user):
-        """
-        Test successful login returns auth token.
+    """Test user login endpoint at /dj-rest-auth/login/"""
+    
+    def test_login_success(self, client):
+        """Test successful login returns auth token."""
+        user = User.objects.create_user(
+            email='test@example.com',
+            username='testuser',
+            password='TestPass123!'
+        )
         
-        Setup: Create user with known password
-        Expected: HTTP 200 with token key
-        """
-        test_user.set_password('testpass123!')
-        test_user.save()
-        
-        url = reverse('rest_login')
         data = {
-            'email': test_user.email,
-            'password': 'testpass123!',
+            'email': 'test@example.com',
+            'password': 'TestPass123!'
         }
-        response = api_client.post(url, data, format='json')
+        response = client.post(
+            '/dj-rest-auth/login/', 
+            data, 
+            content_type='application/json'
+        )
         
         assert response.status_code == status.HTTP_200_OK
         assert 'key' in response.data
-
-    def test_login_invalid_credentials(self, api_client, test_user):
-        """
-        Test login with wrong password fails.
+        assert Token.objects.filter(user=user).exists()
+    
+    def test_login_invalid_password(self, client):
+        """Test login fails with incorrect password."""
+        User.objects.create_user(
+            email='test@example.com',
+            username='testuser',
+            password='TestPass123!'
+        )
         
-        Expected: HTTP 400 Bad Request
-        """
-        test_user.set_password('correctpass123!')
-        test_user.save()
-        
-        url = reverse('rest_login')
         data = {
-            'email': test_user.email,
-            'password': 'wrongpassword',
+            'email': 'test@example.com',
+            'password': 'WrongPassword!'
         }
-        response = api_client.post(url, data, format='json')
+        response = client.post(
+            '/dj-rest-auth/login/', 
+            data, 
+            content_type='application/json'
+        )
+        
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+    
+    def test_login_nonexistent_user(self, client):
+        """Test login fails for user that does not exist."""
+        data = {
+            'email': 'nonexistent@example.com',
+            'password': 'SomePassword123!'
+        }
+        response = client.post(
+            '/dj-rest-auth/login/', 
+            data, 
+            content_type='application/json'
+        )
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-@pytest.mark.unit
-class TestTokenAuthentication:
-    """Test token-based authentication"""
-
-    def test_access_protected_endpoint_with_token(self, authenticated_client):
-        """
-        Test that authenticated requests work with valid token.
+@pytest.mark.django_db
+class TestUserLogout:
+    """Test user logout endpoint at /dj-rest-auth/logout/"""
+    
+    def test_logout_success(self, client):
+        """Test logout invalidates token."""
+        user = User.objects.create_user(
+            email='test@example.com',
+            username='testuser',
+            password='TestPass123!'
+        )
+        token = Token.objects.create(user=user)
         
-        Expected: HTTP 200 OK
-        """
-        url = reverse('userprofile-list')
-        response = authenticated_client.get(url)
+        response = client.post(
+            '/dj-rest-auth/logout/',
+            HTTP_AUTHORIZATION=f'Token {token.key}'
+        )
         
         assert response.status_code == status.HTTP_200_OK
+    
+    def test_logout_unauthorized(self, client):
+        """Test logout without authentication fails."""
+        response = client.post('/dj-rest-auth/logout/')
+        
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_access_protected_endpoint_without_token(self, api_client):
-        """
-        Test that unauthenticated requests to protected endpoints fail.
+
+@pytest.mark.django_db
+class TestProfileCreation:
+    """Test profile auto-creation via Django signals"""
+    
+    def test_profile_created_with_user(self):
+        """Test that UserProfile is auto-created when User is created."""
+        user = User.objects.create_user(
+            email='test@example.com',
+            username='testuser',
+            password='testpass123'
+        )
         
-        Expected: HTTP 401 Unauthorized
-        """
-        url = reverse('userprofile-list')
-        response = api_client.get(url)
+        assert hasattr(user, 'profile')
+        assert user.profile is not None
+    
+    def test_balance_created_with_profile(self):
+        """Test that Balance is auto-created with profile."""
+        user = User.objects.create_user(
+            email='test@example.com',
+            username='testuser',
+            password='testpass123'
+        )
         
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert hasattr(user.profile, 'balance')
+        assert user.profile.balance.balance == 0
+    
+    def test_points_created_with_profile(self):
+        """Test that AltruePoints is auto-created with profile."""
+        user = User.objects.create_user(
+            email='test@example.com',
+            username='testuser',
+            password='testpass123'
+        )
+        
+        assert hasattr(user.profile, 'altrue_points')
+        assert user.profile.altrue_points.balance == 0
+    
+    def test_token_created_with_user(self):
+        """Test that auth token is auto-created with user."""
+        user = User.objects.create_user(
+            email='test@example.com',
+            username='testuser',
+            password='testpass123'
+        )
+        
+        assert Token.objects.filter(user=user).exists()

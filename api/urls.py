@@ -1,6 +1,11 @@
 from django.conf.urls import include
 from rest_framework import routers
 from api.views import  AltrueLevelsList, AltrueStatisticsView, FeedView, LeaderBoardView, PromotedActionsView, create_share_record, QuizResultReceiveView, AllUserDonations,AtrocityList, NpProjectView, WalletDonation, CategoryList, CompanyList, MatchRelationships, NonProfitList, NpProjectList, PostViewSet, QuizList, RateItem, RatingViewSet, RegisterCompany, RegisterNonProfit, ShirtGroupList , ShirtList, ShirtVariationsList, UserProfileView, UserViewSet, LinkList, UserOrder, get_order_status, stripe_webhook
+from Alt.company_views import (
+    CompanyApplicationViewSet, CompanyAdminViewSet, CampaignViewSet,
+    MatchingView, ApplyMatchView, RewardViewSet, CompanyRewardCodesView,
+    CompanyTierViewSet, CompanyInvoiceAdminViewSet
+)
 from django.urls import path, re_path
 from . import views
 
@@ -28,6 +33,13 @@ router.register('posts', PostViewSet)
 router.register('quizes', QuizList)
 router.register('relationships', MatchRelationships)
 router.register(r'quizes/filter_by_category', QuizList, basename='quiz-filter')
+
+# Company Ecosystem Routes
+router.register('company-applications', CompanyApplicationViewSet, basename='company-application')
+router.register('campaigns', CampaignViewSet, basename='campaign')
+router.register('rewards', RewardViewSet, basename='reward')
+router.register('admin/company-tiers', CompanyTierViewSet, basename='company-tier')
+router.register('admin/company-invoices', CompanyInvoiceAdminViewSet, basename='company-invoice')
 
 
 urlpatterns = [
@@ -84,6 +96,33 @@ urlpatterns = [
     path('feedView/', FeedView.as_view(), name ='feedview'),
     path('altruestatistics/', AltrueStatisticsView.as_view(), name='altrue_statistics'),
     path('promoted-actions/', PromotedActionsView.as_view(), name='promoted-actions'),
+
+    # =========================================================================
+    # COMPANY ECOSYSTEM API ENDPOINTS - Phase 1
+    # =========================================================================
+    
+    # Company Admin Endpoints
+    path('companies/<int:pk>/dashboard/', CompanyAdminViewSet.as_view({'get': 'dashboard'}), name='company-dashboard'),
+    path('companies/<int:pk>/wallet/', CompanyAdminViewSet.as_view({'get': 'wallet'}), name='company-wallet'),
+    path('companies/<int:pk>/wallet/deposit/', CompanyAdminViewSet.as_view({'post': 'deposit'}), name='company-wallet-deposit'),
+    path('companies/<int:pk>/invoices/', CompanyAdminViewSet.as_view({'get': 'invoices'}), name='company-invoices'),
+    path('companies/<int:pk>/campaigns/', CompanyAdminViewSet.as_view({'get': 'campaigns', 'post': 'campaigns'}), name='company-campaigns'),
+    path('companies/<int:pk>/rewards/', CompanyAdminViewSet.as_view({'get': 'rewards', 'post': 'rewards'}), name='company-rewards'),
+    path('companies/<int:company_id>/rewards/<int:reward_id>/codes/', CompanyRewardCodesView.as_view(), name='company-reward-codes'),
+    
+    # Campaign Management
+    path('campaigns/<int:pk>/fund/', CampaignViewSet.as_view({'post': 'fund'}), name='campaign-fund'),
+    path('campaigns/<int:pk>/launch/', CampaignViewSet.as_view({'post': 'launch'}), name='campaign-launch'),
+    path('campaigns/<int:pk>/pause/', CampaignViewSet.as_view({'post': 'pause'}), name='campaign-pause'),
+    path('campaigns/<int:pk>/resume/', CampaignViewSet.as_view({'post': 'resume'}), name='campaign-resume'),
+    
+    # Matching Endpoints
+    path('matches/available/', MatchingView.as_view(), name='matches-available'),
+    path('donations/<int:donation_id>/match/', ApplyMatchView.as_view(), name='donation-apply-match'),
+    
+    # Reward Endpoints
+    path('rewards/my/', RewardViewSet.as_view({'get': 'my'}), name='rewards-my'),
+    path('rewards/<int:pk>/claim/', RewardViewSet.as_view({'post': 'claim'}), name='reward-claim'),
 
     # path('cart', views.GetCart.as_view()),
 ]
