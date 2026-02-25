@@ -21,6 +21,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ObjectDoesNotExist
 import random
 import string
+from decimal import Decimal
 from django.apps import apps
 from django.utils import timezone
 from random import randint
