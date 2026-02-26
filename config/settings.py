@@ -14,7 +14,7 @@ if not SECRET_KEY:
 
 DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,.ngrok-free.app',).split(',')
 # Production hosts must be explicitly set via ALLOWED_HOSTS env var
 SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
@@ -22,6 +22,11 @@ CSRF_COOKIE_SECURE = not DEBUG
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
+CSRF_TRUSTED_ORIGINS = [
+    'https://d04c-2600-1700-a340-10e0-930-c134-41df-c8e2.ngrok-free.app',
+    'https://*.ngrok-free.app',
+]
+
 
 # Applications
 INSTALLED_APPS = [
@@ -107,10 +112,17 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
 }
 
-dj_rest_auth = {
-    'USER_DETAILS_SERIALIZER': 'api.serializers',
+REST_AUTH = {
+    'USER_DETAILS_SERIALIZER': 'api.serializers.UserTokenSerializer',
     'TOKEN_SERIALIZER': 'api.serializers.CustomTokenSerializer',
     'REGISTER_SERIALIZER': 'api.serializers.CustomRegisterSerializer',
+    'SESSION_LOGIN': False,
+}
+
+# Additional REST auth serializers for login response
+REST_AUTH_SERIALIZERS = {
+    'USER_DETAILS_SERIALIZER': 'api.serializers.UserTokenSerializer',
+    'TOKEN_SERIALIZER': 'api.serializers.CustomTokenSerializer',
 }
 
 # Static files
