@@ -25,9 +25,18 @@ db.sqlite3
 debug.log
 media/
 media_root/
+media_root*/
+media_rootqr-*.png
 staticfiles/
 static/
 *.sqlite3
+
+# Accidental local dumps and tooling noise
+user_profiles.csv
+.VSCodeCounter/
+.ropeproject/
+requirements.txtpipenv
+*.bundle
 
 # IDEs and editors
 .vscode/
