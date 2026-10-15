@@ -77,6 +77,7 @@ class UserProfileView(viewsets.ModelViewSet):
     queryset=UserProfile.objects.filter()
     serializer_class = UserProfileSerializer
     authentication_classes = (TokenAuthentication, )
+    permission_classes = [IsAuthenticated]
 
     @action(detail=True, methods=['patch'])
     def update_profile(self, request, *args, **kwargs):
