@@ -18,7 +18,7 @@ User = get_user_model()
 
 @pytest.mark.django_db
 class TestUserRegistration:
-    """Test user registration endpoint at /dj-rest-auth/registration/"""
+    """Test user registration endpoint at /auth/registration/"""
     
     def test_registration_success(self, client):
         """Test successful registration creates user, profile, balance, points, token."""
@@ -29,7 +29,7 @@ class TestUserRegistration:
             'username': 'testuser'
         }
         response = client.post(
-            '/dj-rest-auth/registration/', 
+            '/auth/registration/', 
             data, 
             content_type='application/json'
         )
@@ -58,7 +58,7 @@ class TestUserRegistration:
             'username': 'testuser'
         }
         response = client.post(
-            '/dj-rest-auth/registration/', 
+            '/auth/registration/', 
             data, 
             content_type='application/json'
         )
@@ -74,7 +74,7 @@ class TestUserRegistration:
             'username': 'testuser'
         }
         response = client.post(
-            '/dj-rest-auth/registration/', 
+            '/auth/registration/', 
             data, 
             content_type='application/json'
         )
@@ -84,7 +84,7 @@ class TestUserRegistration:
 
 @pytest.mark.django_db
 class TestUserLogin:
-    """Test user login endpoint at /dj-rest-auth/login/"""
+    """Test user login endpoint at /auth/login/"""
     
     def test_login_success(self, client):
         """Test successful login returns auth token."""
@@ -99,7 +99,7 @@ class TestUserLogin:
             'password': 'TestPass123!'
         }
         response = client.post(
-            '/dj-rest-auth/login/', 
+            '/auth/login/', 
             data, 
             content_type='application/json'
         )
@@ -121,7 +121,7 @@ class TestUserLogin:
             'password': 'WrongPassword!'
         }
         response = client.post(
-            '/dj-rest-auth/login/', 
+            '/auth/login/', 
             data, 
             content_type='application/json'
         )
@@ -135,7 +135,7 @@ class TestUserLogin:
             'password': 'SomePassword123!'
         }
         response = client.post(
-            '/dj-rest-auth/login/', 
+            '/auth/login/', 
             data, 
             content_type='application/json'
         )
@@ -145,7 +145,7 @@ class TestUserLogin:
 
 @pytest.mark.django_db
 class TestUserLogout:
-    """Test user logout endpoint at /dj-rest-auth/logout/"""
+    """Test user logout endpoint at /auth/logout/"""
     
     def test_logout_success(self, client):
         """Test logout invalidates token."""
@@ -154,20 +154,22 @@ class TestUserLogout:
             username='testuser',
             password='TestPass123!'
         )
-        token = Token.objects.create(user=user)
+        token, _ = Token.objects.get_or_create(user=user)
         
         response = client.post(
-            '/dj-rest-auth/logout/',
+            '/auth/logout/',
             HTTP_AUTHORIZATION=f'Token {token.key}'
         )
         
         assert response.status_code == status.HTTP_200_OK
     
     def test_logout_unauthorized(self, client):
-        """Test logout without authentication fails."""
-        response = client.post('/dj-rest-auth/logout/')
+        """Test logout without authentication. dj-rest-auth logout is
+        idempotent and returns 200 even unauthenticated (no token to
+        invalidate). Expectation corrected 403 -> 200, Phase 0."""
+        response = client.post('/auth/logout/')
         
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_200_OK
 
 
 @pytest.mark.django_db
