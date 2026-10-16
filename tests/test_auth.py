@@ -24,7 +24,7 @@ class TestUserRegistration:
             'password2': 'TestPass123!',
             'username': 'testuser'
         }
-        response = client.post('/dj-rest-auth/registration/', data, content_type='application/json')
+        response = client.post('/auth/registration/', data, content_type='application/json')
         
         assert response.status_code == status.HTTP_201_CREATED
         assert User.objects.filter(email='test@example.com').exists()
@@ -41,7 +41,7 @@ class TestUserRegistration:
             'password2': 'TestPass123!',
             'username': 'testuser'
         }
-        response = client.post('/dj-rest-auth/registration/', data, content_type='application/json')
+        response = client.post('/auth/registration/', data, content_type='application/json')
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
     
@@ -53,7 +53,7 @@ class TestUserRegistration:
             'password2': 'DifferentPass123!',
             'username': 'testuser'
         }
-        response = client.post('/dj-rest-auth/registration/', data, content_type='application/json')
+        response = client.post('/auth/registration/', data, content_type='application/json')
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -110,10 +110,12 @@ class TestUserLogout:
         assert response.status_code == status.HTTP_200_OK
     
     def test_user_logout_unauthorized(self, client):
-        """Test logout without authentication fails"""
+        """Test logout without authentication. dj-rest-auth logout is
+        idempotent and returns 200 even unauthenticated (no token to
+        invalidate). Fix: assertion corrected from 403, Phase 0."""
         response = client.post('/auth/logout/')
         
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_200_OK
 
 
 @pytest.mark.django_db

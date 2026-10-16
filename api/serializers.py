@@ -792,6 +792,7 @@ class UserProfileSerializer(FlexFieldsModelSerializer):
             "address",
             "country",
             "city",
+            "state",
             "zip",
             "qr_code_img",
             "userActions",
