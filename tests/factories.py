@@ -79,6 +79,16 @@ class ForProfitCompanyFactory(DjangoModelFactory):
     description = 'Test company description'
 
 
+class CategoryFactory(DjangoModelFactory):
+    """Factory for cause categories"""
+    class Meta:
+        model = 'Alt.Category'
+
+    name = factory.Sequence(lambda n: f'Category {n}')
+    image = 'https://example.com/cat.png'
+    information = 'Test category information'
+
+
 class ShirtFactory(DjangoModelFactory):
     """Factory for shirts"""
     class Meta:
@@ -94,6 +104,7 @@ class ShirtFactory(DjangoModelFactory):
     quantity_limited = False
     shirt_style = 'standard'
     shirt_materials = 'cotton'
+    category = factory.SubFactory(CategoryFactory)
 
 
 class CategoryFactory(DjangoModelFactory):

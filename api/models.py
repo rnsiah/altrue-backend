@@ -126,7 +126,9 @@ class UserProfile(models.Model):
     
     @property
     def completed_altrue_actions_count(self):
-        return self.completed_altrue_actions.count()
+        # Bug fix: counted the M2M that production never populates (admin
+        # panel always showed 0). Count actual completed-action rows instead.
+        return UserAltrueAction.objects.filter(profile_acting = self).count()
             
 
     # def setfirstLevel(self):
@@ -795,8 +797,11 @@ def updateBalance(sender, instance, created, **kwargs):
 @receiver(post_save, sender='Alt.NonProfit')
 def updateProfileHasNonProfit(sender, instance, created, **kwargs):
     if created:
-        profile = UserProfile.objects.get(pk = instance.owner.pk)
-        profile.has_nonprofit = True
+        # owner is nullable; guard instead of crashing when NonProfit has no owner.
+        # Also fixed: flag was set but never persisted (missing save).
+        if instance.owner is not None:
+            instance.owner.has_nonprofit = True
+            instance.owner.save(update_fields=['has_nonprofit'])
 
 
 # Creates a donation object when someone(external) donates to a profile
@@ -811,8 +816,12 @@ def create_donation(sender, instance =None, created = False, **kwargs):
 @receiver(post_save, sender = UserAltrueAction)
 def reward_first_time_actions(sender, instance, created, **kwargs):
     from .serializers import UserActionSerializer
-    
-    donationAction = AltrueAction.objects.get(action_code__code = 'makeADonation')
+
+    # Guard: 'makeADonation' AltrueAction may not exist yet (fresh envs).
+    # Previously an unseeded action crashed every UserAltrueAction save.
+    donationAction = AltrueAction.objects.filter(action_code__code = 'makeADonation').first()
+    if donationAction is None:
+        return
     prior_donations = UserAltrueAction.objects.filter(profile_acting = instance.profile_acting, altrue_action = donationAction)
     
     if instance.altrue_action == donationAction and prior_donations.count()==1:

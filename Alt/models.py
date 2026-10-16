@@ -247,8 +247,6 @@ class AtrocityShirt(models.Model):
 
     def __str__(self):
         return self.name
-    def slug(self):
-        return slugify(self.name)
 
 
 class Atrocity(models.Model):
@@ -262,7 +260,9 @@ class Atrocity(models.Model):
     image_url = models.TextField()
     category = models.ManyToManyField('Alt.Category', blank=True, related_name='atrocity')
     country = models.ForeignKey('Alt.Country', on_delete=models.CASCADE,blank=True, null=True )
-    slug = models.SlugField(unique = True)
+    # nullable to match NonProfit/Shirt slug pattern; auto-generated in save()
+    # (schema drift fix: field existed in code+0001 but never in any migration)
+    slug = models.SlugField(unique = True, null=True, blank=True)
     featured= models.BooleanField(blank = False, null = False, default=False)
     date_added= models.DateTimeField( auto_now_add=True)
     videoURL= models.URLField( max_length=200)
@@ -292,8 +292,14 @@ class Atrocity(models.Model):
 
     def __str__(self):
         return self.title
-    def slug(self):
+
+    def slugify_slug(self):
         return slugify(self.title)
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.title)
+        super(Atrocity,self).save()
 
     def get_absolute_url(self):
         return reverse ('Alt:Atrocity', kwargs={'slug':self.slug})
@@ -453,7 +459,15 @@ class Shirt(models.Model):
 
 def slug_generator(sender, instance, *args, **kwargs):
     if not instance.slug:
-        instance.slug='SLUG'
+        # Bug fix: previously stamped every slug-less shirt with the literal
+        # 'SLUG', so saving a second one violated the UNIQUE constraint.
+        base = slugify(instance.name) or 'shirt'
+        slug = base
+        n = 0
+        while Shirt.objects.filter(slug=slug).exclude(pk=instance.pk).exists():
+            n += 1
+            slug = f'{base}-{n}'
+        instance.slug = slug
 
 pre_save.connect(slug_generator, sender=Shirt)
 
@@ -573,7 +587,6 @@ class NonProfit(models.Model):
             slug = self.slugFormatter()
             year = str(self.year_started)
             self.slug = slug + year
-            super(NonProfit, self).save()
         super(NonProfit,self).save()
 
 

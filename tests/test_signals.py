@@ -128,11 +128,13 @@ class TestUserProfileProperties:
     
     def test_available_balance_property(self):
         """Test available balance property"""
-        from tests.factories import BalanceFactory
-        
         profile = UserProfileFactory()
-        balance = BalanceFactory(account=profile, balance=Decimal('150.00'))
-        
+        # The user-creation signal already mints a Balance (OneToOne);
+        # set its value instead of creating a duplicate.
+        balance = profile.balance
+        balance.balance = Decimal('150.00')
+        balance.save()
+
         assert profile.available == Decimal('150.00')
     
     def test_amount_following_property(self):
