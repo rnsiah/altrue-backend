@@ -118,6 +118,10 @@ class UserProfileView(viewsets.ModelViewSet):
         stripe_customer= stripe.Customer.create(
           email= userprofile.user.email,)
 
+        # Bug fix: metadata was only assigned inside the amount-if branch; for
+        # amount in (1, 5, 10) it was referenced while unassigned ->
+        # UnboundLocalError crashed the whole endpoint. Initialize first.
+        metadata = {}
         if amount != 1 and amount != 5 and amount != 10:
             metadata = {"product_id": "prod_Ps8HNJYPOSd9bz",
                         'user_id':userprofile.user.id,
@@ -185,6 +189,10 @@ class UserProfileView(viewsets.ModelViewSet):
         stripe_customer= stripe.Customer.create(
           email= userprofile.user.email,)
 
+        # Bug fix: metadata was only assigned inside the amount-if branch; for
+        # amount in (1, 5, 10) it was referenced while unassigned ->
+        # UnboundLocalError crashed the whole endpoint. Initialize first.
+        metadata = {}
         if amount != 1 and amount != 5 and amount != 10:
             metadata = {"product_id": "prod_Ps8HNJYPOSd9bz",
                         'user_id':userprofile.user.id,

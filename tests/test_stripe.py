@@ -31,7 +31,6 @@ class TestStripePaymentIntent:
         user = UserFactory()
         profile = user.profile
         nonprofit = NonProfitFactory()
-        balance = BalanceFactory(account=profile)
         token, _ = Token.objects.get_or_create(user=user)
         
         data = {
@@ -41,7 +40,7 @@ class TestStripePaymentIntent:
         }
         
         response = client.post(
-            f'/api/userprofiles/{profile.pk}/addUserDonationToNonProfit/',
+            f'/api/userprofile/{profile.pk}/addUserDonationToNonProfit/',
             data,
             content_type='application/json',
             HTTP_AUTHORIZATION=f'Token {token.key}'
@@ -75,7 +74,6 @@ class TestStripePaymentIntent:
         user = UserFactory()
         profile = user.profile
         atrocity = AtrocityFactory()
-        balance = BalanceFactory(account=profile)
         token, _ = Token.objects.get_or_create(user=user)
         
         data = {
@@ -85,7 +83,7 @@ class TestStripePaymentIntent:
         }
         
         response = client.post(
-            f'/api/userprofiles/{profile.pk}/addUserDonationToAtrocity/',
+            f'/api/userprofile/{profile.pk}/addUserDonationToAtrocity/',
             data,
             content_type='application/json',
             HTTP_AUTHORIZATION=f'Token {token.key}'
@@ -95,10 +93,12 @@ class TestStripePaymentIntent:
         assert 'id' in response.data
         assert 'client_secret' in response.data
     
+    @patch('stripe.Customer.create')
     @patch('stripe.PaymentIntent.create')
-    def test_create_payment_intent_stripe_error(self, mock_intent, client):
+    def test_create_payment_intent_stripe_error(self, mock_intent, mock_customer, client):
         """Test handling Stripe errors"""
         import stripe
+        mock_customer.return_value = MagicMock(id='cus_test123')
         mock_intent.side_effect = stripe.error.StripeError("Test error")
         
         user = UserFactory()
@@ -113,7 +113,7 @@ class TestStripePaymentIntent:
         }
         
         response = client.post(
-            f'/api/userprofiles/{profile.pk}/addUserDonationToNonProfit/',
+            f'/api/userprofile/{profile.pk}/addUserDonationToNonProfit/',
             data,
             content_type='application/json',
             HTTP_AUTHORIZATION=f'Token {token.key}'
@@ -123,7 +123,7 @@ class TestStripePaymentIntent:
     
     def test_create_payment_intent_unauthorized(self, client):
         """Test creating PaymentIntent without authentication fails"""
-        response = client.post('/api/userprofiles/1/addUserDonationToNonProfit/')
+        response = client.post('/api/userprofile/1/addUserDonationToNonProfit/')
         
         assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]
 
@@ -133,20 +133,22 @@ class TestStripeConfig:
     """Test Stripe configuration endpoints"""
     
     def test_get_stripe_config(self, client):
-        """Test getting Stripe public key"""
-        response = client.get('/stripe/config/')
+        """Test getting Stripe public key (plain Django JsonResponse view)"""
+        response = client.get('/payments/config/')
         
         assert response.status_code == status.HTTP_200_OK
-        assert 'publicKey' in response.data
+        payload = response.json()
+        assert 'publicKey' in payload
     
     def test_stripe_checkout_session(self, client):
-        """Test creating checkout session"""
+        """Test creating checkout session (plain Django JsonResponse view)"""
         with patch('stripe.checkout.Session.create') as mock_create:
             mock_create.return_value = {'id': 'cs_test123'}
             
-            response = client.get('/stripe/create-checkout-session/')
+            response = client.get('/payments/create-checkout-session/')
             
             assert response.status_code == status.HTTP_200_OK
+            assert 'sessionId' in response.json()
 
 
 @pytest.mark.django_db
@@ -168,7 +170,7 @@ class TestStripeWebhooks:
         mock_construct.return_value = mock_event
         
         response = client.post(
-            '/stripe/webhook/',
+            '/payments/webhook/',
             data='{}',
             content_type='application/json',
             HTTP_STRIPE_SIGNATURE='test_sig'
@@ -185,7 +187,7 @@ class TestStripeWebhooks:
         )
         
         response = client.post(
-            '/stripe/webhook/',
+            '/payments/webhook/',
             data='{}',
             content_type='application/json',
             HTTP_STRIPE_SIGNATURE='invalid_sig'
@@ -200,7 +202,7 @@ class TestStripeWebhooks:
         mock_construct.side_effect = ValueError("Invalid payload")
         
         response = client.post(
-            '/stripe/webhook/',
+            '/payments/webhook/',
             data='invalid json',
             content_type='application/json',
             HTTP_STRIPE_SIGNATURE='test_sig'
