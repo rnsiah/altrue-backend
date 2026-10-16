@@ -32,25 +32,19 @@ def create_test_user():
 
 def create_test_nonprofit():
     """Helper to create test nonprofit."""
-    from Alt.models import Country
-    country = Country.objects.create(name='TestCountry')
     return NonProfit.objects.create(
         name='Test Nonprofit',
         slug='test-nonprofit',
-        country=country
     )
 
 
 def create_test_atrocity():
     """Helper to create test atrocity."""
-    from Alt.models import Country
-    country = Country.objects.create(name='TestCountry')
     return Atrocity.objects.create(
         title='Test Atrocity',
         region='Test Region',
         info='Test info',
         image_url='https://example.com/image.png',
-        country=country,
         slug='test-atrocity'
     )
 
@@ -80,7 +74,6 @@ class TestPaymentIntentCreation:
         # Create test data
         user = create_test_user()
         profile = user.profile
-        Balance.objects.create(account=profile, balance=100)
         nonprofit = create_test_nonprofit()
         token, _ = Token.objects.get_or_create(user=user)
         
@@ -91,7 +84,7 @@ class TestPaymentIntentCreation:
         }
         
         response = client.post(
-            f'/api/userprofiles/{profile.pk}/addUserDonationToNonProfit/',
+            f'/api/userprofile/{profile.pk}/addUserDonationToNonProfit/',
             data,
             content_type='application/json',
             HTTP_AUTHORIZATION=f'Token {token.key}'
@@ -126,7 +119,6 @@ class TestPaymentIntentCreation:
         
         user = create_test_user()
         profile = user.profile
-        Balance.objects.create(account=profile)
         atrocity = create_test_atrocity()
         token, _ = Token.objects.get_or_create(user=user)
         
@@ -137,7 +129,7 @@ class TestPaymentIntentCreation:
         }
         
         response = client.post(
-            f'/api/userprofiles/{profile.pk}/addUserDonationToAtrocity/',
+            f'/api/userprofile/{profile.pk}/addUserDonationToAtrocity/',
             data,
             content_type='application/json',
             HTTP_AUTHORIZATION=f'Token {token.key}'
@@ -147,8 +139,9 @@ class TestPaymentIntentCreation:
         assert 'id' in response.data
         assert 'client_secret' in response.data
     
+    @patch('stripe.Customer.create')
     @patch('stripe.PaymentIntent.create')
-    def test_payment_intent_stripe_error(self, mock_intent, client):
+    def test_payment_intent_stripe_error(self, mock_intent, mock_customer, client):
         """Test handling Stripe API errors gracefully.
         
         Setup: Mock Stripe to raise error
@@ -156,6 +149,7 @@ class TestPaymentIntentCreation:
         Expected: 400 Bad Request with error message
         """
         import stripe
+        mock_customer.return_value = MagicMock(id='cus_test123')
         mock_intent.side_effect = stripe.error.StripeError("Card declined")
         
         user = create_test_user()
@@ -170,7 +164,7 @@ class TestPaymentIntentCreation:
         }
         
         response = client.post(
-            f'/api/userprofiles/{profile.pk}/addUserDonationToNonProfit/',
+            f'/api/userprofile/{profile.pk}/addUserDonationToNonProfit/',
             data,
             content_type='application/json',
             HTTP_AUTHORIZATION=f'Token {token.key}'
@@ -180,7 +174,7 @@ class TestPaymentIntentCreation:
     
     def test_payment_intent_unauthorized(self, client):
         """Test PaymentIntent creation fails without authentication."""
-        response = client.post('/api/userprofiles/1/addUserDonationToNonProfit/')
+        response = client.post('/api/userprofile/1/addUserDonationToNonProfit/')
         
         assert response.status_code in [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN]
 
@@ -210,7 +204,7 @@ class TestStripeWebhooks:
         mock_construct.return_value = mock_event
         
         response = client.post(
-            '/stripe/webhook/',
+            '/payments/webhook/',
             data='{}',
             content_type='application/json',
             HTTP_STRIPE_SIGNATURE='test_sig'
@@ -232,7 +226,7 @@ class TestStripeWebhooks:
         )
         
         response = client.post(
-            '/stripe/webhook/',
+            '/payments/webhook/',
             data='{}',
             content_type='application/json',
             HTTP_STRIPE_SIGNATURE='invalid_sig'
@@ -251,7 +245,7 @@ class TestStripeWebhooks:
         mock_construct.side_effect = ValueError("Invalid payload")
         
         response = client.post(
-            '/stripe/webhook/',
+            '/payments/webhook/',
             data='not valid json',
             content_type='application/json',
             HTTP_STRIPE_SIGNATURE='test_sig'
@@ -268,13 +262,13 @@ class TestStripeConfig:
         """Test getting Stripe publishable key.
         
         Setup: None
-        Input: GET request to /stripe/config/
+        Input: GET request to /payments/config/
         Expected: JSON with publicKey field
         """
-        response = client.get('/stripe/config/')
+        response = client.get('/payments/config/')
         
         assert response.status_code == status.HTTP_200_OK
-        assert 'publicKey' in response.data
+        assert 'publicKey' in response.json()
     
     @patch('stripe.checkout.Session.create')
     def test_create_checkout_session(self, mock_create, client):
@@ -286,7 +280,7 @@ class TestStripeConfig:
         """
         mock_create.return_value = {'id': 'cs_test123'}
         
-        response = client.get('/stripe/create-checkout-session/')
+        response = client.get('/payments/create-checkout-session/')
         
         assert response.status_code == status.HTTP_200_OK
-        assert 'sessionId' in response.data or 'error' in response.data
+        assert 'sessionId' in response.json()
