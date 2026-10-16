@@ -163,7 +163,9 @@ class UserDonationFactory(DjangoModelFactory):
         model = 'api.UserDonation'
 
     user = factory.SubFactory(UserProfileFactory)
-    wallet = factory.SubFactory(BalanceFactory)
+    # Reuse the wallet the user-creation signal already minted —
+    # Balance.account is a OneToOne; a second Balance violates it.
+    wallet = factory.SelfAttribute('user.balance')
     dollar_amount = 25.00
     donation_type = 'S'
 

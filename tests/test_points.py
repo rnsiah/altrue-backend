@@ -71,10 +71,12 @@ class TestInitializeUserLevel:
     
     def test_initialize_user_level_adds_requirements(self):
         """Test that level requirements are added"""
-        # Create level 1 with requirements
+        # The level ladder (0-4) is seeded by migration 0186; reuse
+        # the existing level 1 instead of creating a duplicate.
+        from Alt.models import AltrueLevel
         action1 = AltrueActionFactory()
         action2 = AltrueActionFactory()
-        level1 = AltrueLevelFactory(level_number=1, minimum_points=100)
+        level1 = AltrueLevel.objects.get(level_number=1)
         level1.requiredActions.add(action1, action2)
         
         user = UserFactory()
@@ -226,9 +228,11 @@ class TestLevelProgression:
     
     def test_user_can_level_up(self):
         """Test that users can progress to next level"""
-        # Create levels
-        level0 = AltrueLevelFactory(level_number=0, name='Beginner', minimum_points=0)
-        level1 = AltrueLevelFactory(level_number=1, name='Intermediate', minimum_points=100)
+        # The level ladder (0-4) is seeded by migration 0186; use the
+        # seeded levels instead of creating duplicates.
+        from Alt.models import AltrueLevel
+        level0 = AltrueLevel.objects.get(level_number=0)
+        level1 = AltrueLevel.objects.get(level_number=1)
         
         user = UserFactory()
         profile = user.profile

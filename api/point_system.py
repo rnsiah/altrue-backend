@@ -159,8 +159,13 @@ def record_user_action(user_profile, action_code, action_data):
 
         ##Check if the user has already reached the maximum number of occurrences for the Altrue Action
         existing_user_actions = UserAltrueAction.objects.filter(profile_acting = user_profile, altrue_action = altrue_action)
-        
-        if existing_user_actions.count() is None or existing_user_actions.count() < altrue_action.number_of_occurrences:
+
+        # Bug fix: number_of_occurrences is nullable; a None value made the
+        # '<' comparison raise TypeError, which the broad except swallowed —
+        # so actions without an occurrence limit never awarded points.
+        # Treat None as unlimited.
+        limit = altrue_action.number_of_occurrences
+        if limit is None or existing_user_actions.count() < limit:
             print(True)
             user_altrue_action = UserAltrueAction.objects.create(profile_acting = user_profile,
                                                             altrue_action=altrue_action)
