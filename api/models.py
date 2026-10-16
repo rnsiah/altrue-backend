@@ -448,7 +448,7 @@ class CompanyMatchDonation(models.Model):
 
 
     def __str__(self):
-        return '{} matched {} for {}'.format(self.company.name, self.transaction_matched.username, self.dollar_amount)
+        return '{} matched {} for {}'.format(self.company.name, self.transaction_matched, self.amount)
 
 # class CompanyNewsUpdate(models.Model):
 #     company = models.ForeignKey("Alt.ForProfitCompany", on_delete=models.CASCADE, related_name='companyupdate')
@@ -611,12 +611,12 @@ def matchUserCompanyDonation(sender, instance, created=True, **kwargs):
                     alldonations = []
                     donList = []
                     for donation in prior_donations:
-                        alldonations.append(donation.dollar_amount)
+                        alldonations.append(donation.amount)
                     total_donations = sum(alldonations)
                 
 
                     for don in nonMatchedDonationsToNonProfit:
-                        donList.append(don.dollar_amount)
+                        donList.append(don.amount)
                 
                     totalDons = sum(donList) + total_donations
                     
@@ -628,9 +628,9 @@ def matchUserCompanyDonation(sender, instance, created=True, **kwargs):
                      
                     
                     if totalDons< theMatch.funding_limit and final < difference:
-                        CompanyMatchDonation.objects.create(company = company, nonprofit=nonProfitDonatedTo, transaction_matched = instance, dollar_amount = final)
+                        CompanyMatchDonation.objects.create(company = company, nonprofit=nonProfitDonatedTo, transaction_matched = instance, amount = final)
                     elif totalDons<theMatch.funding_limit and final>difference:
-                        CompanyMatchDonation.objects.create(company = company, nonprofit = nonProfitDonatedTo, transaction_matched = instance, dollar_amount = difference)
+                        CompanyMatchDonation.objects.create(company = company, nonprofit = nonProfitDonatedTo, transaction_matched = instance, amount = difference)
                 except ObjectDoesNotExist:
                     pass
                     
@@ -655,12 +655,12 @@ def matchUserCompanyDonation(sender, instance, created=True, **kwargs):
                     alldonations = []
                     donList = []
                     for donation in prior_donations:
-                        alldonations.append(donation.dollar_amount)
+                        alldonations.append(donation.amount)
                     total_donations = sum(alldonations)
                 
                 
                     for don in nonMatchedDonationsToNonProfit:
-                        donList.append(don.dollar_amount)
+                        donList.append(don.amount)
                 
                     totalDons = sum(donList) + total_donations
                     
@@ -678,21 +678,21 @@ def matchUserCompanyDonation(sender, instance, created=True, **kwargs):
                     #check if under the limit for organization and limit for project:
                     if theproject.is_active == True and final<differenceNP and final< differenceProject :
                         try:
-                            CompanyMatchDonation.objects.create(project = theproject, company= company, transaction_matched = instance, dollar_amount =final )
+                            CompanyMatchDonation.objects.create(project = theproject, company= company, transaction_matched = instance, amount =final )
                    
                         except ObjectDoesNotExist:
                             pass
                       
                     elif theproject.is_active == True and final<differenceNP and final>differenceProject:
                         try:
-                            CompanyMatchDonation.objects.create(project = theproject, company= company, transaction_matched = instance, dollar_amount =differenceProject )
+                            CompanyMatchDonation.objects.create(project = theproject, company= company, transaction_matched = instance, amount =differenceProject )
                    
                         except ObjectDoesNotExist:
                             pass
                       
                     elif theproject.is_active == True and final>differenceNP and final<differenceProject:
                         try:
-                            CompanyMatchDonation.objects.create(project = theproject, company= company, transaction_matched = instance, dollar_amount =differenceNP )
+                            CompanyMatchDonation.objects.create(project = theproject, company= company, transaction_matched = instance, amount =differenceNP )
                    
                         except ObjectDoesNotExist:
                             pass
@@ -715,12 +715,12 @@ def matchUserCompanyDonation(sender, instance, created=True, **kwargs):
                     alldonations = []
                     donList = []
                     for donation in prior_matchedDonations:
-                        alldonations.append(donation.dollar_amount)
+                        alldonations.append(donation.amount)
                     total_donations = sum(alldonations)
                 
 
                     for don in nonMatchedDonationsToAtrocity:
-                        donList.append(don.dollar_amount)
+                        donList.append(don.amount)
                 
                     totalDons = sum(donList) + total_donations
                     dec_match = float(mat.match_level)
@@ -732,9 +732,9 @@ def matchUserCompanyDonation(sender, instance, created=True, **kwargs):
                     
                     
                     if totalDons< mat.funding_limit and new_total< mat.funding_limit :
-                        CompanyMatchDonation.objects.create(atrocity = atrocityDonatedTo, company = company, transaction_matched = instance, dollar_amount =fina)
+                        CompanyMatchDonation.objects.create(atrocity = atrocityDonatedTo, company = company, transaction_matched = instance, amount =fina)
                     elif totalDons <mat.funding_limit and new_total > mat.funding_limit:
-                        CompanyMatchDonation.objects.create(atrocity=atrocityDonatedTo, transaction_matched =instance, company = company, dollar_amount = difference)
+                        CompanyMatchDonation.objects.create(atrocity=atrocityDonatedTo, transaction_matched =instance, company = company, amount = difference)
                            
                   
 

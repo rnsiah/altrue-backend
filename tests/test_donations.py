@@ -22,7 +22,10 @@ class TestUserDonation:
         """Test creating a user donation to nonprofit"""
         user = UserFactory()
         profile = user.profile
-        balance = BalanceFactory(account=profile, balance=Decimal('100.00'))
+        # Reuse the signal-minted wallet (Balance.account is OneToOne)
+        balance = profile.balance
+        balance.balance = Decimal('100.00')
+        balance.save()
         nonprofit = NonProfitFactory()
         
         donation = UserDonation.objects.create(
@@ -45,7 +48,7 @@ class TestUserDonation:
         """Test creating a user donation to atrocity"""
         user = UserFactory()
         profile = user.profile
-        balance = BalanceFactory(account=profile)
+        balance = profile.balance  # signal-minted wallet (OneToOne)
         atrocity = AtrocityFactory()
         
         donation = UserDonation.objects.create(
@@ -63,7 +66,7 @@ class TestUserDonation:
         """Test creating a user donation to project"""
         user = UserFactory()
         profile = user.profile
-        balance = BalanceFactory(account=profile)
+        balance = profile.balance  # signal-minted wallet (OneToOne)
         project = NonProfitProjectFactory()
         
         donation = UserDonation.objects.create(
@@ -87,7 +90,7 @@ class TestDonationBalanceUpdate:
         """Test that external donor donations update user balance"""
         user = UserFactory()
         profile = user.profile
-        balance = BalanceFactory(account=profile, balance=Decimal('0.00'))
+        balance = profile.balance  # signal-minted wallet (OneToOne)
         
         donor = DonorFactory(
             sent_to=profile,
@@ -106,7 +109,10 @@ class TestDonationBalanceUpdate:
         """Test that wallet donations decrease user balance"""
         user = UserFactory()
         profile = user.profile
-        balance = BalanceFactory(account=profile, balance=Decimal('100.00'))
+        # Reuse the signal-minted wallet (Balance.account is OneToOne)
+        balance = profile.balance
+        balance.balance = Decimal('100.00')
+        balance.save()
         nonprofit = NonProfitFactory()
         
         # Create donation that uses wallet balance (no stripe_id = wallet)
@@ -207,12 +213,14 @@ class TestCompanyMatching:
     def test_user_donation_triggers_company_match(self):
         """Test that user donations trigger company matching"""
         from tests.factories import ForProfitCompanyFactory, CompanyNonProfitRelationshipFactory
-        from Alt.models import CompanyMatchDonation
+        from api.models import CompanyMatchDonation
         
         # Setup
         user = UserFactory()
         profile = user.profile
-        balance = BalanceFactory(account=profile, balance=Decimal('200.00'))
+        balance = profile.balance  # signal-minted wallet (OneToOne)
+        balance.balance = Decimal('200.00')
+        balance.save()
         nonprofit = NonProfitFactory()
         company = ForProfitCompanyFactory()
         

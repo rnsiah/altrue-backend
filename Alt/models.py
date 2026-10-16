@@ -1180,8 +1180,12 @@ def updateNPBalanceAfterProjectDonation(instance,**kwargs ):
         nonprofitBalance.save()
 
 
-@receiver(post_save, sender=NonProfitProjectDonation)
+@receiver(post_save, sender=AtrocityDonation)
 def updateAtrocityBalanceAfterDonation(instance, **kwargs):
+    # Bug fix: this handler was registered with sender=NonProfitProjectDonation
+    # (a model with no 'atrocity' field), so it duplicated the NP-project
+    # balance handler above and crashed on every project-donation save while
+    # AtrocityBalance was never updated. Correct sender is AtrocityDonation.
     with transaction.atomic():
         atrocityBalance = AtrocityBalance.objects.get(atrocity = instance.atrocity)
         atrocityBalance.balance += instance.donation_amount
