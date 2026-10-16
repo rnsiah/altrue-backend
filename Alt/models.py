@@ -780,8 +780,18 @@ class ForProfitCompany(models.Model):
         return update
 
     def save(self, *args, **kwargs):
-        slug = self.slugFormatter()
-        self.slug = slug + self.year_started
+        # Bug fix: slug was recomputed on every save from only the first
+        # word of the name + year, so two companies with the same first
+        # word introduced the same year collided on the UNIQUE slug.
+        # Generate once and de-duplicate like Shirt/Atrocity.
+        if not self.slug:
+            base = slugify(self.name) or 'company'
+            slug = base + str(self.year_started or '')
+            n = 0
+            while ForProfitCompany.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                n += 1
+                slug = f'{base}{self.year_started or ""}-{n}'
+            self.slug = slug
         super(ForProfitCompany, self).save()
 
 

@@ -21,7 +21,7 @@ class TestUserProfileAPI:
         UserProfileFactory()
         UserProfileFactory()
         
-        response = auth_client.get('/api/userprofiles/')
+        response = auth_client.get('/api/userprofile/')
         
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 2
@@ -30,7 +30,7 @@ class TestUserProfileAPI:
         """Test retrieving specific user profile"""
         profile = UserProfileFactory()
         
-        response = auth_client.get(f'/api/userprofiles/{profile.pk}/')
+        response = auth_client.get(f'/api/userprofile/{profile.pk}/')
         
         assert response.status_code == status.HTTP_200_OK
         assert response.data['username'] == profile.username
@@ -46,7 +46,7 @@ class TestUserProfileAPI:
         }
         
         response = auth_client.patch(
-            f'/api/userprofiles/{profile.pk}/',
+            f'/api/userprofile/{profile.pk}/',
             data,
             content_type='application/json'
         )
@@ -73,7 +73,7 @@ class TestNonProfitAPI:
         """Test retrieving specific nonprofit"""
         nonprofit = NonProfitFactory()
         
-        response = auth_client.get(f'/api/nonprofits/{nonprofit.slug}/')
+        response = auth_client.get(f'/api/nonprofits/{nonprofit.pk}/')
         
         assert response.status_code == status.HTTP_200_OK
         assert response.data['name'] == nonprofit.name
@@ -97,7 +97,7 @@ class TestAtrocityAPI:
         """Test retrieving specific atrocity"""
         atrocity = AtrocityFactory()
         
-        response = auth_client.get(f'/api/atrocities/{atrocity.slug}/')
+        response = auth_client.get(f'/api/atrocities/{atrocity.pk}/')
         
         assert response.status_code == status.HTTP_200_OK
         assert response.data['title'] == atrocity.title
@@ -121,7 +121,7 @@ class TestShirtAPI:
         """Test retrieving specific shirt"""
         shirt = ShirtFactory()
         
-        response = auth_client.get(f'/api/shirts/{shirt.slug}/')
+        response = auth_client.get(f'/api/shirts/{shirt.pk}/')
         
         assert response.status_code == status.HTTP_200_OK
         assert response.data['name'] == shirt.name
@@ -145,7 +145,7 @@ class TestCompanyAPI:
         """Test retrieving specific company"""
         company = ForProfitCompanyFactory()
         
-        response = auth_client.get(f'/api/companies/{company.slug}/')
+        response = auth_client.get(f'/api/companies/{company.pk}/')
         
         assert response.status_code == status.HTTP_200_OK
         assert response.data['name'] == company.name
