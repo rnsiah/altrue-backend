@@ -194,6 +194,6 @@ class TestProjectAPI:
 def auth_client(client):
     """Fixture to create authenticated client"""
     user = UserFactory()
-    token = Token.objects.create(user=user)
+    token, _ = Token.objects.get_or_create(user=user)
     client.defaults['HTTP_AUTHORIZATION'] = f'Token {token.key}'
     return client

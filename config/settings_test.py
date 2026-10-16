@@ -66,3 +66,6 @@ LOGGING = {
 
 # CORS allow all for tests
 CORS_ALLOW_ALL_ORIGINS = True
+
+# Timezone-aware datetime support for SQLite backend (audit fix 2026-10-14)
+USE_TZ = True

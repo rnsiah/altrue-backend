@@ -32,7 +32,7 @@ class TestStripePaymentIntent:
         profile = user.profile
         nonprofit = NonProfitFactory()
         balance = BalanceFactory(account=profile)
-        token = Token.objects.create(user=user)
+        token, _ = Token.objects.get_or_create(user=user)
         
         data = {
             'amount': 500,  # $5.00 in cents
@@ -76,7 +76,7 @@ class TestStripePaymentIntent:
         profile = user.profile
         atrocity = AtrocityFactory()
         balance = BalanceFactory(account=profile)
-        token = Token.objects.create(user=user)
+        token, _ = Token.objects.get_or_create(user=user)
         
         data = {
             'amount': 1000,  # $10.00 in cents
@@ -104,7 +104,7 @@ class TestStripePaymentIntent:
         user = UserFactory()
         profile = user.profile
         nonprofit = NonProfitFactory()
-        token = Token.objects.create(user=user)
+        token, _ = Token.objects.get_or_create(user=user)
         
         data = {
             'amount': 500,

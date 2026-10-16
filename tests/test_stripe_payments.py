@@ -82,7 +82,7 @@ class TestPaymentIntentCreation:
         profile = user.profile
         Balance.objects.create(account=profile, balance=100)
         nonprofit = create_test_nonprofit()
-        token = Token.objects.create(user=user)
+        token, _ = Token.objects.get_or_create(user=user)
         
         data = {
             'amount': 500,
@@ -128,7 +128,7 @@ class TestPaymentIntentCreation:
         profile = user.profile
         Balance.objects.create(account=profile)
         atrocity = create_test_atrocity()
-        token = Token.objects.create(user=user)
+        token, _ = Token.objects.get_or_create(user=user)
         
         data = {
             'amount': 1000,
@@ -161,7 +161,7 @@ class TestPaymentIntentCreation:
         user = create_test_user()
         profile = user.profile
         nonprofit = create_test_nonprofit()
-        token = Token.objects.create(user=user)
+        token, _ = Token.objects.get_or_create(user=user)
         
         data = {
             'amount': 500,

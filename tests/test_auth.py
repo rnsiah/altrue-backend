@@ -72,7 +72,7 @@ class TestUserLogin:
             'email': 'test@example.com',
             'password': 'TestPass123!'
         }
-        response = client.post('/dj-rest-auth/login/', data, content_type='application/json')
+        response = client.post('/auth/login/', data, content_type='application/json')
         
         assert response.status_code == status.HTTP_200_OK
         assert 'key' in response.data
@@ -84,7 +84,7 @@ class TestUserLogin:
             'email': 'test@example.com',
             'password': 'WrongPass123!'
         }
-        response = client.post('/dj-rest-auth/login/', data, content_type='application/json')
+        response = client.post('/auth/login/', data, content_type='application/json')
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
     
@@ -93,7 +93,7 @@ class TestUserLogin:
         data = {
             'email': 'test@example.com'
         }
-        response = client.post('/dj-rest-auth/login/', data, content_type='application/json')
+        response = client.post('/auth/login/', data, content_type='application/json')
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -105,13 +105,13 @@ class TestUserLogout:
     def test_user_logout_success(self, client, auth_user):
         """Test successful logout invalidates token"""
         client.force_login(auth_user)
-        response = client.post('/dj-rest-auth/logout/')
+        response = client.post('/auth/logout/')
         
         assert response.status_code == status.HTTP_200_OK
     
     def test_user_logout_unauthorized(self, client):
         """Test logout without authentication fails"""
-        response = client.post('/dj-rest-auth/logout/')
+        response = client.post('/auth/logout/')
         
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
@@ -129,7 +129,7 @@ class TestUserProfile:
         client.force_login(auth_user)
         token = Token.objects.get(user=auth_user)
         response = client.get(
-            f'/api/userprofiles/{profile.pk}/',
+            f'/api/userprofile/{profile.pk}/',
             HTTP_AUTHORIZATION=f'Token {token.key}'
         )
         
@@ -154,7 +154,7 @@ class TestUserProfile:
             'zip': '54321'
         }
         response = client.patch(
-            f'/api/userprofiles/{profile.pk}/update_profile/',
+            f'/api/userprofile/{profile.pk}/update_profile/',
             data,
             content_type='application/json',
             HTTP_AUTHORIZATION=f'Token {token.key}'
@@ -183,6 +183,6 @@ def auth_user():
 @pytest.fixture
 def auth_client(client, auth_user):
     """Fixture to create authenticated client"""
-    token = Token.objects.create(user=auth_user)
+    token, _ = Token.objects.get_or_create(user=auth_user)
     client.defaults['HTTP_AUTHORIZATION'] = f'Token {token.key}'
     return client

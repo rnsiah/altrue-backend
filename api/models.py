@@ -311,6 +311,10 @@ class UserProfile(models.Model):
 
         
     def generate_qr(self):
+        # Guard: skip S3 upload when no bucket is configured (e.g. tests/dev).
+        # Previously crashed with TypeError from botocore bucket validation.
+        if not getattr(settings, 'AWS_STORAGE_BUCKET_NAME', None):
+            return
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
